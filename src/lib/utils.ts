@@ -16,9 +16,10 @@ export function formatCurrency(amount: number | string, currency = 'VND'): strin
   }).format(num);
 }
 
-export function formatDate(date: string | Date, format: 'short' | 'long' | 'datetime' = 'short'): string {
+export function formatDate(date: string | Date | null | undefined, format: 'short' | 'long' | 'datetime' = 'short'): string {
+  if (!date) return '—';
   const d = typeof date === 'string' ? new Date(date) : date;
-  if (isNaN(d.getTime())) return String(date);
+  if (isNaN(d.getTime())) return '—';
   if (format === 'short') {
     return new Intl.DateTimeFormat('vi-VN', { day: '2-digit', month: '2-digit', year: 'numeric' }).format(d);
   }
@@ -40,7 +41,8 @@ export function formatNumber(num: number | string, decimals = 0): string {
   }).format(n);
 }
 
-export function debounce<T extends (...args: unknown[]) => unknown>(fn: T, ms: number): (...args: Parameters<T>) => void {
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export function debounce<T extends (...args: any[]) => any>(fn: T, ms: number): (...args: Parameters<T>) => void {
   let timeout: ReturnType<typeof setTimeout>;
   return (...args: Parameters<T>) => {
     clearTimeout(timeout);

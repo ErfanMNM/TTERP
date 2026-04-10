@@ -4,9 +4,18 @@ const api = axios.create({
   baseURL: '/api',
   withCredentials: true,
   headers: {
-    'Content-Type': 'application/json',
     'Accept': 'application/json',
   },
+});
+
+// Remove Content-Type for GET requests (ERPNext rejects GET with Content-Type: application/json)
+api.interceptors.request.use((config) => {
+  if (config.method === 'get' || config.method === 'GET') {
+    delete config.headers['Content-Type'];
+  } else {
+    config.headers['Content-Type'] = 'application/json';
+  }
+  return config;
 });
 
 // ─── Auth ────────────────────────────────────────────────────────────────────

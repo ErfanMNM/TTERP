@@ -25,25 +25,12 @@ const navGroups: NavGroup[] = [
     ],
   },
   {
-    title: 'Bán hàng',
-    icon: <ShoppingCart size={20} />,
+    title: 'Dự án',
+    icon: <Briefcase size={20} />,
     items: [
-      { label: 'Báo giá', path: '/selling/quotations', icon: <FileText size={18} /> },
-      { label: 'Đơn hàng bán', path: '/selling/sales-orders', icon: <ClipboardList size={18} /> },
-      { label: 'Giao hàng', path: '/selling/delivery-notes', icon: <Truck size={18} /> },
-      { label: 'Hóa đơn bán', path: '/selling/sales-invoices', icon: <Receipt size={18} /> },
-      { label: 'Khách hàng', path: '/selling/customers', icon: <Users size={18} /> },
-    ],
-  },
-  {
-    title: 'Mua hàng',
-    icon: <ShoppingCart size={20} />,
-    items: [
-      { label: 'Báo giá NCC', path: '/buying/supplier-quotations', icon: <FileText size={18} /> },
-      { label: 'Đơn mua hàng', path: '/buying/purchase-orders', icon: <ClipboardList size={18} /> },
-      { label: 'Nhận hàng', path: '/buying/purchase-receipts', icon: <Truck size={18} /> },
-      { label: 'Hóa đơn mua', path: '/buying/purchase-invoices', icon: <Receipt size={18} /> },
-      { label: 'Nhà cung cấp', path: '/buying/suppliers', icon: <Building2 size={18} /> },
+      { label: 'Dự án', path: '/projects/projects', icon: <Briefcase size={18} /> },
+      { label: 'Công việc', path: '/projects/tasks', icon: <ClipboardList size={18} /> },
+      { label: 'Bảng công', path: '/projects/timesheets', icon: <BarChart3 size={18} /> },
     ],
   },
   {
@@ -81,12 +68,25 @@ const navGroups: NavGroup[] = [
     ],
   },
   {
-    title: 'Dự án',
-    icon: <Briefcase size={20} />,
+    title: 'Bán hàng',
+    icon: <ShoppingCart size={20} />,
     items: [
-      { label: 'Dự án', path: '/projects/projects', icon: <Briefcase size={18} /> },
-      { label: 'Công việc', path: '/projects/tasks', icon: <ClipboardList size={18} /> },
-      { label: 'Bảng công', path: '/projects/timesheets', icon: <BarChart3 size={18} /> },
+      { label: 'Báo giá', path: '/selling/quotations', icon: <FileText size={18} /> },
+      { label: 'Đơn hàng bán', path: '/selling/sales-orders', icon: <ClipboardList size={18} /> },
+      { label: 'Giao hàng', path: '/selling/delivery-notes', icon: <Truck size={18} /> },
+      { label: 'Hóa đơn bán', path: '/selling/sales-invoices', icon: <Receipt size={18} /> },
+      { label: 'Khách hàng', path: '/selling/customers', icon: <Users size={18} /> },
+    ],
+  },
+  {
+    title: 'Mua hàng',
+    icon: <ShoppingCart size={20} />,
+    items: [
+      { label: 'Báo giá NCC', path: '/buying/supplier-quotations', icon: <FileText size={18} /> },
+      { label: 'Đơn mua hàng', path: '/buying/purchase-orders', icon: <ClipboardList size={18} /> },
+      { label: 'Nhận hàng', path: '/buying/purchase-receipts', icon: <Truck size={18} /> },
+      { label: 'Hóa đơn mua', path: '/buying/purchase-invoices', icon: <Receipt size={18} /> },
+      { label: 'Nhà cung cấp', path: '/buying/suppliers', icon: <Building2 size={18} /> },
     ],
   },
   {
@@ -122,7 +122,7 @@ const navGroups: NavGroup[] = [
 
 const bottomNavItems = [
   { label: 'Tổng quan', path: '/dashboard', icon: <LayoutDashboard size={22} /> },
-  { label: 'Bán/Mua', path: '/selling/sales-orders', icon: <ShoppingCart size={22} /> },
+  { label: 'Dự án', path: '/projects/projects', icon: <Briefcase size={22} /> },
   { label: 'Kho', path: '/stock/balance', icon: <Package size={22} /> },
   { label: 'Nhân sự', path: '/hr/employees', icon: <Users size={22} /> },
 ];
@@ -230,7 +230,7 @@ export default function Layout() {
       {sidebarOpen && (
         <div className="lg:hidden fixed inset-0 z-50">
           <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" onClick={() => setSidebarOpen(false)} />
-          <aside className="absolute left-0 top-0 bottom-0 w-72 bg-white shadow-2xl flex flex-col animate-slide-in">
+          <aside className="absolute left-0 top-0 bottom-0 w-72 bg-white shadow-2xl flex flex-col page-enter">
             <div className="flex items-center gap-2 px-4 py-4 border-b border-gray-100">
               <div className="w-8 h-8 bg-blue-600 rounded-lg flex items-center justify-center">
                 <span className="text-white font-bold text-sm">MTE</span>

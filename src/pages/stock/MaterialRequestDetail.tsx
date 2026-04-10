@@ -30,7 +30,7 @@ interface MRData {
   docstatus: number;
   status: string;
   company: string;
-  per_ordered: number;
+  per_ordered?: number;
   items?: MRItem[];
   [key: string]: unknown;
 }
@@ -185,7 +185,7 @@ export default function MaterialRequestDetail() {
         </div>
         <div className="card card-body py-3">
           <p className="text-xs text-gray-400 mb-1">% Đã đặt</p>
-          <p className="text-sm font-bold text-blue-600">{formatNumber(data.per_ordered, 1)}%</p>
+          <p className="text-sm font-bold text-blue-600">{formatNumber(data.per_ordered ?? 0, 1)}%</p>
         </div>
       </div>
 

@@ -37,7 +37,7 @@ export default function StockLedger() {
     };
     stockLedgerApi.list(params)
       .then(res => {
-        const raw: LedgerRow[] = res.data?.message || [];
+        const raw = res.data?.message as LedgerRow[] || [];
         setData(raw);
       })
       .catch(() => setData([]))

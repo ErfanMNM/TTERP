@@ -26,7 +26,7 @@ export default function Projects() {
   useEffect(() => {
     projectApi.list({
       fields: JSON.stringify(['name', 'project_name', 'status', 'project_type', 'percent_complete', 'expected_start_date', 'expected_end_date']),
-      order_by: 'modified desc',
+      order_by: { field: 'modified', order: 'desc' },
     }).then(res => {
       setData(res.data?.data || []);
     }).catch(() => {}).finally(() => setLoading(false));

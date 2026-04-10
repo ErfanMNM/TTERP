@@ -48,7 +48,7 @@ export default function SalesOrderDetail() {
     if (!name) return;
     setLoading(true);
     salesOrderApi.get(name).then(res => {
-      setDoc(res.data?.data || null);
+      setDoc((res.data?.data || null) as SalesOrderDetail | null);
     }).catch(() => setDoc(null)).finally(() => setLoading(false));
   };
 

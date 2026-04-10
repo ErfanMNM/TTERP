@@ -1,9 +1,10 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Plus, Trash2, Save } from 'lucide-react';
+import { Plus, Trash2, Save, X, Search } from 'lucide-react';
 import PageHeader from '../../components/PageHeader';
-import { stockEntryApi, warehouseApi, itemApi, companyApi } from '../../services/api';
+import { stockEntryApi, warehouseApi, itemApi } from '../../services/api';
 import { useApp } from '../../contexts/AppContext';
+import { debounce } from '../../lib/utils';
 
 interface Warehouse {
   name: string;
@@ -37,12 +38,16 @@ export default function StockEntryNew() {
   const navigate = useNavigate();
   const { companies, selectedCompany } = useApp();
   const [loading, setLoading] = useState(false);
-  const [fetchingItems, setFetchingItems] = useState(false);
   const [warehouses, setWarehouses] = useState<Warehouse[]>([]);
-  const [items, setItems] = useState<Item[]>([]);
+
+  // Item picker modal
+  const [pickerOpen, setPickerOpen] = useState(false);
+  const [pickerRowIdx, setPickerRowIdx] = useState<number | null>(null);
+  const [pickerSearch, setPickerSearch] = useState('');
+  const [pickerItems, setPickerItems] = useState<Item[]>([]);
+  const [pickerLoading, setPickerLoading] = useState(false);
+
   const [error, setError] = useState('');
-  const [showItemSearch, setShowItemSearch] = useState<number | null>(null);
-  const [itemSearch, setItemSearch] = useState('');
 
   const [form, setForm] = useState({
     stock_entry_type: 'Material Receipt',
@@ -86,29 +91,65 @@ export default function StockEntryNew() {
     setRows(prev => prev.filter((_, i) => i !== idx));
   };
 
-  const searchItems = async (query: string) => {
-    if (!query) { setItems([]); return; }
-    setFetchingItems(true);
-    try {
-      const res = await itemApi.list({
-        fields: JSON.stringify(['name', 'item_name', 'item_code']),
-        filters: JSON.stringify([['Item', 'item_name', 'like', '%' + query + '%']]),
-        limit_page_length: 20,
-      });
-      setItems(res.data?.data || []);
-    } catch {
-      setItems([]);
-    } finally {
-      setFetchingItems(false);
-    }
+  const openPicker = (idx: number) => {
+    setPickerRowIdx(idx);
+    setPickerSearch(rows[idx].item_code || '');
+    setPickerItems([]);
+    setPickerOpen(true);
+    // Fetch all items immediately
+    setPickerLoading(true);
+    itemApi.list({
+      fields: JSON.stringify(['name', 'item_name', 'item_code']),
+      limit_page_length: 50,
+    }).then(res => setPickerItems(res.data?.data || []))
+      .catch(() => setPickerItems([]))
+      .finally(() => setPickerLoading(false));
   };
 
-  const handleItemSelect = (idx: number, item: Item) => {
-    handleRowChange(idx, 'item_code', item.item_code || item.name);
-    handleRowChange(idx, 'item_name', item.item_name);
-    setShowItemSearch(null);
-    setItemSearch('');
-    setItems([]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  const debouncedPickerSearch = useCallback(
+    debounce(async (query: string) => {
+      if (!query.trim()) {
+        setPickerLoading(false);
+        return;
+      }
+      setPickerLoading(true);
+      try {
+        const res = await itemApi.list({
+          fields: JSON.stringify(['name', 'item_name', 'item_code']),
+          filters: JSON.stringify([['Item', 'item_name', 'like', '%' + query + '%']]),
+          limit_page_length: 50,
+        });
+        setPickerItems(res.data?.data || []);
+      } catch {
+        setPickerItems([]);
+      } finally {
+        setPickerLoading(false);
+      }
+    }, 300),
+    []
+  );
+
+  const handlePickerSearch = (query: string) => {
+    setPickerSearch(query);
+    debouncedPickerSearch(query);
+  };
+
+  const handlePickerSelect = (item: Item) => {
+    if (pickerRowIdx === null) return;
+    handleRowChange(pickerRowIdx, 'item_code', item.item_code || item.name);
+    handleRowChange(pickerRowIdx, 'item_name', item.item_name);
+    setPickerOpen(false);
+    setPickerRowIdx(null);
+    setPickerSearch('');
+    setPickerItems([]);
+  };
+
+  const closePicker = () => {
+    setPickerOpen(false);
+    setPickerRowIdx(null);
+    setPickerSearch('');
+    setPickerItems([]);
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -239,52 +280,23 @@ export default function StockEntryNew() {
                   <tr key={idx}>
                     <td className="text-gray-400">{idx + 1}</td>
                     <td>
-                      <div className="relative">
+                      <div className="flex gap-1">
                         <input
                           type="text"
                           value={row.item_code}
-                          onChange={e => handleRowChange(idx, 'item_code', e.target.value)}
-                          onFocus={() => setShowItemSearch(idx)}
-                          onBlur={() => setTimeout(() => { setShowItemSearch(null); setItems([]); }, 200)}
-                          onKeyDown={e => {
-                            if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
-                              e.preventDefault();
-                              setShowItemSearch(idx);
-                              searchItems(row.item_code);
-                            }
-                          }}
-                          placeholder="Mã vật tư"
-                          className="input-field text-sm"
+                          readOnly
+                          placeholder="Chọn vật tư..."
+                          className="input-field text-sm cursor-pointer"
+                          onClick={() => openPicker(idx)}
                         />
-                        {showItemSearch === idx && (
-                          <div className="absolute z-10 top-full left-0 right-0 mt-1 bg-white border border-gray-200 rounded-xl shadow-lg max-h-48 overflow-y-auto">
-                            <input
-                              type="text"
-                              value={itemSearch}
-                              onChange={e => { setItemSearch(e.target.value); searchItems(e.target.value); }}
-                              placeholder="Tìm vật tư..."
-                              className="w-full px-3 py-2 text-sm border-b border-gray-100 focus:outline-none sticky top-0 bg-white"
-                              autoFocus
-                            />
-                            {fetchingItems ? (
-                              <div className="p-3 text-sm text-gray-400 text-center">Đang tìm...</div>
-                            ) : items.length === 0 ? (
-                              <div className="p-3 text-sm text-gray-400 text-center">Không tìm thấy</div>
-                            ) : (
-                              items.map(item => (
-                                <button
-                                  key={item.name}
-                                  type="button"
-                                  onMouseDown={() => handleItemSelect(idx, item)}
-                                  className="w-full text-left px-3 py-2 hover:bg-blue-50 text-sm border-b border-gray-50 last:border-0"
-                                >
-                                  <span className="font-medium">{item.item_code || item.name}</span>
-                                  <span className="text-gray-400 ml-2">{item.item_name}</span>
-                                </button>
-                              ))
-                            )}
-                          </div>
-                        )}
+                        <button
+                          type="button"
+                          onClick={() => openPicker(idx)}
+                          className="btn btn-ghost btn-icon text-gray-400 hover:text-blue-600"
+                          title="Tìm vật tư"
+                        >
+                          <Search size={15} />
+                        </button>
                       </div>
                     </td>
                     <td>
@@ -375,6 +387,57 @@ export default function StockEntryNew() {
           </button>
         </div>
       </form>
+
+      {/* Item Picker Modal */}
+      {pickerOpen && (
+        <>
+          <div className="dialog-overlay" onClick={closePicker} />
+          <div className="dialog-content" style={{ maxWidth: '600px' }}>
+            <div className="flex items-center justify-between p-4 border-b border-gray-100">
+              <h3 className="text-base font-semibold text-gray-800">Chọn vật tư</h3>
+              <button type="button" onClick={closePicker} className="btn-icon text-gray-400 hover:text-gray-600">
+                <X size={18} />
+              </button>
+            </div>
+            <div className="p-4">
+              <input
+                type="text"
+                value={pickerSearch}
+                onChange={e => handlePickerSearch(e.target.value)}
+                placeholder="Tìm theo tên hoặc mã vật tư..."
+                className="input-field"
+                autoFocus
+              />
+            </div>
+            <div className="max-h-80 overflow-y-auto">
+              {pickerLoading ? (
+                <div className="p-8 text-center text-sm text-gray-400">
+                  <div className="w-6 h-6 border-2 border-blue-200 border-t-blue-600 rounded-full animate-spin mx-auto mb-2" />
+                  Đang tìm...
+                </div>
+              ) : pickerItems.length === 0 ? (
+                <div className="p-8 text-center text-sm text-gray-400">
+                  Không tìm thấy vật tư nào
+                </div>
+              ) : (
+                <div className="divide-y divide-gray-50">
+                  {pickerItems.map(item => (
+                    <button
+                      key={item.name}
+                      type="button"
+                      onClick={() => handlePickerSelect(item)}
+                      className="w-full text-left px-4 py-3 hover:bg-blue-50 transition-colors"
+                    >
+                      <span className="font-medium text-gray-800">{item.item_code || item.name}</span>
+                      <span className="text-gray-400 ml-3">{item.item_name}</span>
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+        </>
+      )}
     </div>
   );
 }
