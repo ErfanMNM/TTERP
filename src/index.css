@@ -176,6 +176,10 @@
     padding: 1rem;
   }
   .dialog-content {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
     background: white;
     border-radius: 1rem;
     box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
@@ -184,12 +188,11 @@
     width: 100%;
     max-width: 42rem;
     animation: dialogEnter 0.25s ease-out;
-    position: relative;
     z-index: 51;
   }
   @keyframes dialogEnter {
-    from { opacity: 0; transform: scale(0.95) translateY(10px); }
-    to { opacity: 1; transform: scale(1) translateY(0); }
+    from { opacity: 0; transform: translate(-50%, -50%) scale(0.95); }
+    to { opacity: 1; transform: translate(-50%, -50%) scale(1); }
   }
   .dialog-enter {
     animation: dialogEnter 0.25s ease-out;

@@ -14,6 +14,8 @@ export default defineConfig({
       '@': resolve(__dirname, '.'),
     },
   },
+  // Cloudflare Pages deployment
+  base: '/',
   server: {
     port: 3002,
     proxy: {

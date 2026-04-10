@@ -22,9 +22,9 @@ export default function Login() {
         {/* Logo */}
         <div className="flex flex-col items-center mb-8">
           <div className="w-16 h-16 bg-blue-600 rounded-2xl flex items-center justify-center shadow-lg shadow-blue-200 mb-4">
-            <span className="text-white font-bold text-2xl">MTE</span>
+            <span className="text-white font-bold text-2xl">E4V</span>
           </div>
-          <h1 className="text-2xl font-bold text-gray-900">ERP MT&E</h1>
+          <h1 className="text-2xl font-bold text-gray-900">ERPNext4V</h1>
           <p className="text-sm text-gray-500 mt-1">Đăng nhập vào hệ thống</p>
         </div>
 

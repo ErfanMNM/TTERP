@@ -130,7 +130,7 @@ const bottomNavItems = [
 export default function Layout() {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [collapsed, setCollapsed] = useState(false);
-  const [expandedGroups, setExpandedGroups] = useState<Record<number, boolean>>({ 0: true, 1: true, 2: true });
+  const [expandedGroups, setExpandedGroups] = useState<Record<number, boolean>>({ 0: true, 1: true, 2: true, 3: true });
   const { logout, user } = useAuth();
   const navigate = useNavigate();
 
@@ -155,9 +155,9 @@ export default function Layout() {
         {/* Logo */}
         <div className="flex items-center gap-2 px-4 py-4 border-b border-gray-100">
           <div className="w-8 h-8 bg-blue-600 rounded-lg flex items-center justify-center flex-shrink-0">
-            <span className="text-white font-bold text-sm">MTE</span>
+            <span className="text-white font-bold text-sm">E4V</span>
           </div>
-          {!collapsed && <span className="font-semibold text-gray-800">ERP MT&E</span>}
+          {!collapsed && <span className="font-semibold text-gray-800">ERPNext4V</span>}
           <button
             onClick={() => setCollapsed(!collapsed)}
             className={cn('ml-auto p-1 rounded hover:bg-gray-100', collapsed && 'mx-auto')}
@@ -233,9 +233,9 @@ export default function Layout() {
           <aside className="absolute left-0 top-0 bottom-0 w-72 bg-white shadow-2xl flex flex-col page-enter">
             <div className="flex items-center gap-2 px-4 py-4 border-b border-gray-100">
               <div className="w-8 h-8 bg-blue-600 rounded-lg flex items-center justify-center">
-                <span className="text-white font-bold text-sm">MTE</span>
+                <span className="text-white font-bold text-sm">E4V</span>
               </div>
-              <span className="font-semibold text-gray-800">ERP MT&E</span>
+              <span className="font-semibold text-gray-800">ERPNext4V</span>
               <button onClick={() => setSidebarOpen(false)} className="ml-auto p-1 rounded hover:bg-gray-100">
                 <X size={20} />
               </button>
