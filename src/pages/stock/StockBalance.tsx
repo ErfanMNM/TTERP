@@ -1,0 +1,208 @@
+import React, { useEffect, useState } from 'react';
+import { Download, BarChart3, RefreshCw } from 'lucide-react';
+import PageHeader from '../../components/PageHeader';
+import DataTable from '../../components/DataTable';
+import PageLoader from '../../components/PageLoader';
+import { stockBalanceApi } from '../../services/api';
+import { formatNumber, cn } from '../../lib/utils';
+
+interface BalanceRow {
+  name?: string;
+  item_code: string;
+  item_name?: string;
+  warehouse: string;
+  actual_qty: number;
+  ordered_qty: number;
+  projected_qty: number;
+  [key: string]: unknown;
+}
+
+export default function StockBalance() {
+  const [data, setData] = useState<BalanceRow[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(20);
+  const [search, setSearch] = useState('');
+  const [refreshing, setRefreshing] = useState(false);
+
+  const fetchData = (pageNum = 1) => {
+    setLoading(true);
+    const params: Record<string, unknown> = {
+      limit: pageSize * 10,
+      start: (pageNum - 1) * pageSize,
+    };
+    if (search) {
+      params.filters = JSON.stringify([['item_code', 'like', '%' + search + '%']]);
+    }
+    stockBalanceApi.list(params)
+      .then(res => {
+        const raw: BalanceRow[] = res.data?.message || [];
+        setData(raw);
+      })
+      .catch(() => setData([]))
+      .finally(() => setLoading(false));
+  };
+
+  useEffect(() => {
+    fetchData(page);
+  }, [page, pageSize, search]);
+
+  const handleRefresh = () => {
+    setRefreshing(true);
+    fetchData(page);
+    setTimeout(() => setRefreshing(false), 500);
+  };
+
+  const handleExport = () => {
+    if (data.length === 0) return;
+    const headers = ['Mã vật tư', 'Tên vật tư', 'Kho', 'Tồn thực', 'Đã đặt', 'Dự kiến'];
+    const rows = data.map(r => [
+      r.item_code,
+      r.item_name || '',
+      r.warehouse,
+      r.actual_qty,
+      r.ordered_qty,
+      r.projected_qty,
+    ]);
+    const csv = [headers, ...rows].map(r => r.join(',')).join('\n');
+    const blob = new Blob(['\ufeff' + csv], { type: 'text/csv;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `ton-kho-${new Date().toISOString().slice(0, 10)}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
+  const columns = [
+    {
+      key: 'item_code',
+      label: 'Mã vật tư',
+      sortable: true,
+      minWidth: '140px',
+      render: (val: unknown) => <span className="font-medium text-blue-600">{String(val)}</span>,
+    },
+    {
+      key: 'item_name',
+      label: 'Tên vật tư',
+      sortable: true,
+      minWidth: '180px',
+      render: (val: unknown) => <span className="truncate">{String(val || '—')}</span>,
+    },
+    {
+      key: 'warehouse',
+      label: 'Kho',
+      sortable: true,
+      minWidth: '160px',
+    },
+    {
+      key: 'actual_qty',
+      label: 'Tồn thực',
+      sortable: true,
+      width: '110px',
+      render: (val: unknown) => (
+        <span className={`font-medium ${Number(val) < 0 ? 'text-red-600' : 'text-gray-800'}`}>
+          {formatNumber(Number(val), 2)}
+        </span>
+      ),
+    },
+    {
+      key: 'ordered_qty',
+      label: 'Đã đặt',
+      sortable: true,
+      width: '100px',
+      render: (val: unknown) => (
+        <span className="text-blue-600">{formatNumber(Number(val), 2)}</span>
+      ),
+    },
+    {
+      key: 'projected_qty',
+      label: 'Dự kiến',
+      sortable: true,
+      width: '110px',
+      render: (val: unknown) => (
+        <span className={`font-medium ${Number(val) < 0 ? 'text-red-600' : 'text-green-600'}`}>
+          {formatNumber(Number(val), 2)}
+        </span>
+      ),
+    },
+  ];
+
+  return (
+    <div className="max-w-6xl mx-auto page-enter">
+      <PageHeader
+        title="Tồn kho"
+        subtitle="Báo cáo số dư tồn kho theo vật tư và kho"
+        actions={
+          <div className="flex items-center gap-2">
+            <button
+              onClick={handleRefresh}
+              className={cn('btn btn-secondary flex items-center gap-1.5', refreshing && 'animate-spin')}
+              title="Làm mới"
+            >
+              <RefreshCw size={16} />
+              <span className="hidden sm:inline">Làm mới</span>
+            </button>
+            <button
+              onClick={handleExport}
+              disabled={data.length === 0}
+              className="btn btn-secondary flex items-center gap-1.5 disabled:opacity-50"
+            >
+              <Download size={16} />
+              <span className="hidden sm:inline">Xuất CSV</span>
+            </button>
+          </div>
+        }
+      />
+
+      {/* Summary cards */}
+      {!loading && data.length > 0 && (
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-4">
+          <div className="card card-body py-3">
+            <p className="text-xs text-gray-400 uppercase tracking-wide">Tổng vật tư</p>
+            <p className="text-xl font-bold text-gray-800">{formatNumber(data.length)}</p>
+          </div>
+          <div className="card card-body py-3">
+            <p className="text-xs text-gray-400 uppercase tracking-wide">Tồn thực</p>
+            <p className="text-xl font-bold text-blue-600">
+              {formatNumber(data.reduce((s, r) => s + Number(r.actual_qty), 0), 2)}
+            </p>
+          </div>
+          <div className="card card-body py-3">
+            <p className="text-xs text-gray-400 uppercase tracking-wide">Đã đặt</p>
+            <p className="text-xl font-bold text-purple-600">
+              {formatNumber(data.reduce((s, r) => s + Number(r.ordered_qty), 0), 2)}
+            </p>
+          </div>
+          <div className="card card-body py-3">
+            <p className="text-xs text-gray-400 uppercase tracking-wide">Dự kiến</p>
+            <p className="text-xl font-bold text-green-600">
+              {formatNumber(data.reduce((s, r) => s + Number(r.projected_qty), 0), 2)}
+            </p>
+          </div>
+        </div>
+      )}
+
+      {loading ? (
+        <PageLoader rows={8} />
+      ) : (
+        <DataTable
+          columns={columns}
+          data={data}
+          loading={false}
+          rowKey="item_code"
+          page={page}
+          pageSize={pageSize}
+          onPageChange={setPage}
+          onPageSizeChange={(size) => { setPageSize(size); setPage(1); }}
+          searchValue={search}
+          onSearchChange={(val) => { setSearch(val); setPage(1); }}
+          showSearch={true}
+          showPagination={true}
+          emptyText="Không có dữ liệu tồn kho"
+          emptyIcon={<BarChart3 size={32} className="text-gray-300" />}
+        />
+      )}
+    </div>
+  );
+}
