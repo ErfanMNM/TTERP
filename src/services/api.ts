@@ -69,8 +69,17 @@ export function updateResource<T = unknown>(doctype: string, name: string, data:
   return api.put<T>(`/resource/${doctype}/${encodeURIComponent(name)}`, data);
 }
 
-export function callMethod<T = unknown>(method: string, args?: Record<string, unknown>) {
-  return api.post<T>(`/method/${method}`, args);
+export async function callMethod<T = unknown>(method: string, args?: Record<string, unknown>) {
+  // ERPNext /api/method/ requires form-encoded body, not JSON
+  const params = new URLSearchParams(
+    Object.fromEntries(
+      Object.entries(args ?? {}).map(([k, v]) => [k, typeof v === 'object' ? JSON.stringify(v) : String(v)])
+    )
+  );
+  const res = await api.post<T>(`/method/${method}`, params, {
+    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+  });
+  return res.data;
 }
 
 // ─── Company ─────────────────────────────────────────────────────────────────

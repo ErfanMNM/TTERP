@@ -36,7 +36,7 @@ export default function StockBalance() {
     }
     stockBalanceApi.list(params)
       .then(res => {
-        const raw = res.data?.message as BalanceRow[] || [];
+        const raw = res.message as BalanceRow[] || [];
         setData(raw);
       })
       .catch(() => setData([]))
