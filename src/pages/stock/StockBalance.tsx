@@ -4,16 +4,18 @@ import PageHeader from '../../components/PageHeader';
 import DataTable from '../../components/DataTable';
 import PageLoader from '../../components/PageLoader';
 import { stockBalanceApi } from '../../services/api';
-import { formatNumber, cn } from '../../lib/utils';
+import { formatNumber, formatCurrency, cn } from '../../lib/utils';
 
 interface BalanceRow {
-  name?: string;
   item_code: string;
-  item_name?: string;
+  item_name?: string | null;
   warehouse: string;
   actual_qty: number;
   ordered_qty: number;
   projected_qty: number;
+  reserved_qty?: number;
+  stock_uom?: string;
+  stock_value?: number;
   [key: string]: unknown;
 }
 
@@ -27,16 +29,9 @@ export default function StockBalance() {
 
   const fetchData = (pageNum = 1) => {
     setLoading(true);
-    const params: Record<string, unknown> = {
-      limit: pageSize * 10,
-      start: (pageNum - 1) * pageSize,
-    };
-    if (search) {
-      params.filters = JSON.stringify([['item_code', 'like', '%' + search + '%']]);
-    }
-    stockBalanceApi.list(params)
+    stockBalanceApi.list({ limit: pageSize * 10, start: (pageNum - 1) * pageSize })
       .then(res => {
-        const raw = res.message as BalanceRow[] || [];
+        const raw: BalanceRow[] = Array.isArray(res.message) ? res.message : [];
         setData(raw);
       })
       .catch(() => setData([]))
@@ -55,7 +50,7 @@ export default function StockBalance() {
 
   const handleExport = () => {
     if (data.length === 0) return;
-    const headers = ['Mã vật tư', 'Tên vật tư', 'Kho', 'Tồn thực', 'Đã đặt', 'Dự kiến'];
+    const headers = ['Mã vật tư', 'Tên vật tư', 'Kho', 'Tồn thực', 'Đã đặt', 'Dự kiến', 'Giá trị tồn'];
     const rows = data.map(r => [
       r.item_code,
       r.item_name || '',
@@ -63,6 +58,7 @@ export default function StockBalance() {
       r.actual_qty,
       r.ordered_qty,
       r.projected_qty,
+      r.stock_value ?? 0,
     ]);
     const csv = [headers, ...rows].map(r => r.join(',')).join('\n');
     const blob = new Blob(['\ufeff' + csv], { type: 'text/csv;charset=utf-8' });
@@ -79,27 +75,26 @@ export default function StockBalance() {
       key: 'item_code',
       label: 'Mã vật tư',
       sortable: true,
-      minWidth: '140px',
-      render: (val: unknown) => <span className="font-medium text-blue-600">{String(val)}</span>,
+      width: '160px',
+      render: (val: unknown) => <span className="font-medium text-blue-600 block truncate">{String(val)}</span>,
     },
     {
       key: 'item_name',
       label: 'Tên vật tư',
       sortable: true,
-      minWidth: '180px',
-      render: (val: unknown) => <span className="truncate">{String(val || '—')}</span>,
+      minWidth: '220px',
     },
     {
       key: 'warehouse',
       label: 'Kho',
       sortable: true,
-      minWidth: '160px',
+      minWidth: '180px',
     },
     {
       key: 'actual_qty',
       label: 'Tồn thực',
       sortable: true,
-      width: '110px',
+      width: '120px',
       render: (val: unknown) => (
         <span className={`font-medium ${Number(val) < 0 ? 'text-red-600' : 'text-gray-800'}`}>
           {formatNumber(Number(val), 2)}
@@ -119,10 +114,21 @@ export default function StockBalance() {
       key: 'projected_qty',
       label: 'Dự kiến',
       sortable: true,
-      width: '110px',
+      width: '100px',
       render: (val: unknown) => (
         <span className={`font-medium ${Number(val) < 0 ? 'text-red-600' : 'text-green-600'}`}>
           {formatNumber(Number(val), 2)}
+        </span>
+      ),
+    },
+    {
+      key: 'stock_value',
+      label: 'Giá trị tồn',
+      sortable: true,
+      width: '130px',
+      render: (val: unknown) => (
+        <span className="text-gray-700">
+          {formatCurrency(Number(val) || 0)}
         </span>
       ),
     },

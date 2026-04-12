@@ -70,12 +70,8 @@ export function updateResource<T = unknown>(doctype: string, name: string, data:
 }
 
 export async function callMethod<T = unknown>(method: string, args?: Record<string, unknown>) {
-  // ERPNext /api/method/ requires form-encoded body, not JSON
-  const params = new URLSearchParams(
-    Object.fromEntries(
-      Object.entries(args ?? {}).map(([k, v]) => [k, typeof v === 'object' ? JSON.stringify(v) : String(v)])
-    )
-  );
+  // ERPNext /api/method/ expects a single "args" key containing a JSON string
+  const params = new URLSearchParams({ args: JSON.stringify(args ?? {}) });
   const res = await api.post<T>(`/method/${method}`, params, {
     headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
   });
@@ -409,8 +405,54 @@ export const stockReconciliationApi = {
 
 // ─── Stock Balance ────────────────────────────────────────────────────────────
 export const stockBalanceApi = {
-  list: (params?: Record<string, unknown>) =>
-    callMethod<{ message: Record<string, unknown>[] }>('erpnext.stock.report.stock_balance.stock_balance.get_data', params),
+  list: async (params?: { warehouse?: string; item_code?: string; limit?: number; start?: number }) => {
+    const filters: string[] = [];
+    if (params?.warehouse) filters.push(['Bin', 'warehouse', '=', params.warehouse]);
+    if (params?.item_code) filters.push(['Bin', 'item_code', '=', params.item_code]);
+
+    const res = await api.get<{ data: Array<{
+      item_code: string; warehouse: string;
+      actual_qty: number; ordered_qty: number; projected_qty: number;
+      reserved_qty: number; stock_uom: string; stock_value: number;
+    }> }>('/resource/Bin', {
+      params: {
+        fields: JSON.stringify(['item_code', 'warehouse', 'actual_qty', 'ordered_qty', 'projected_qty', 'reserved_qty', 'stock_uom', 'stock_value']),
+        filters: JSON.stringify(filters),
+        limit_page_length: params?.limit ?? 10000,
+        limit_start: params?.start ?? 0,
+      },
+    });
+    const bins = res.data.data ?? [];
+
+    // Enrich with item_name, item_group from Item doctype
+    const codes = [...new Set(bins.map(b => b.item_code).filter(Boolean))];
+    if (codes.length === 0) return { message: bins };
+
+    let itemMap: Record<string, { item_name: string; item_group: string }> = {};
+    try {
+      const itemRes = await api.get<{ data: Array<{
+        name: string; item_name: string; item_group: string;
+      }> }>('/resource/Item', {
+        params: {
+          fields: JSON.stringify(['name', 'item_name', 'item_group']),
+          filters: JSON.stringify([['Item', 'name', 'in', codes]]),
+          limit_page_length: 10000,
+        },
+      });
+      for (const it of itemRes.data.data ?? []) {
+        itemMap[it.name] = { item_name: it.item_name, item_group: it.item_group };
+      }
+    } catch {
+      // Enrichment failed, continue without item_name
+    }
+
+    const enriched = bins.map(bin => ({
+      ...bin,
+      item_name: itemMap[bin.item_code]?.item_name ?? null,
+      item_group: itemMap[bin.item_code]?.item_group ?? null,
+    }));
+    return { message: enriched };
+  },
 };
 
 // ─── Stock Ledger ─────────────────────────────────────────────────────────────

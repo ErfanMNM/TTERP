@@ -23,6 +23,12 @@ export default defineConfig({
         target: 'https://erp.mte.vn',
         changeOrigin: true,
         secure: false,
+        configure: (proxy) => {
+          proxy.on('proxyReq', (proxyReq) => {
+            // Vite proxy rejects 100-continue with 417 before forwarding
+            proxyReq.removeHeader('expect');
+          });
+        },
       },
     },
   },

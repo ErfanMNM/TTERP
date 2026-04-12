@@ -45,6 +45,7 @@ export default function DataTable({
   const [sortKey, setSortKey] = useState<string | null>(null);
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc');
   const [colSearch, setColSearch] = useState<Record<string, string>>({});
+  const [expandedRow, setExpandedRow] = useState<string | null>(null);
 
   const handleSort = (key: string) => {
     if (sortKey === key) {
@@ -77,7 +78,7 @@ export default function DataTable({
   const endRow = total ? Math.min(page * pageSize, total) : Math.min(page * pageSize, sorted.length);
 
   return (
-    <div className="flex flex-col gap-3">
+    <div className="flex flex-col min-h-0" style={{ flex: '1 1 auto', minHeight: 0 }}>
       {/* Toolbar */}
       <div className="flex items-center gap-2 flex-wrap">
         {showSearch && onSearchChange && (
@@ -99,8 +100,8 @@ export default function DataTable({
         <table className="data-table">
           <thead>
             <tr>
-              {columns.map(col => (
-                <th key={String(col.key)} style={{ width: col.width, minWidth: col.minWidth }}>
+              {columns.map((col, i) => (
+                <th key={String(col.key)} style={{ width: col.width }}>
                   <div className="flex flex-col">
                     <div
                       className={cn('flex items-center gap-1.5', col.sortable && 'cursor-pointer hover:text-gray-800 select-none')}
@@ -147,20 +148,46 @@ export default function DataTable({
             ) : (
               sorted.map((row, idx) => {
                 const key = rowKey ? String(row[rowKey]) : String(idx);
+                const isExpanded = expandedRow === key;
                 return (
-                  <tr
-                    key={key}
-                    className={cn(onRowClick && 'cursor-pointer')}
-                    onClick={() => onRowClick?.(row)}
-                  >
-                    {columns.map(col => (
-                      <td key={String(col.key)}>
-                        {col.render
-                          ? col.render(row[col.key], row, idx)
-                          : String(row[col.key] ?? '—')}
-                      </td>
-                    ))}
-                  </tr>
+                  <React.Fragment key={key}>
+                    <tr
+                      className={cn(onRowClick && 'cursor-pointer', isExpanded && 'bg-blue-50/50')}
+                      onClick={() => {
+                        if (onRowClick) {
+                          onRowClick(row);
+                        } else {
+                          setExpandedRow(isExpanded ? null : key);
+                        }
+                      }}
+                    >
+                      {columns.map(col => (
+                        <td key={String(col.key)} title={String(row[col.key] ?? '')}>
+                          {col.render
+                            ? col.render(row[col.key], row, idx)
+                            : String(row[col.key] ?? '—')}
+                        </td>
+                      ))}
+                    </tr>
+                    {isExpanded && (
+                      <tr className="bg-blue-50/30 border-b border-gray-100">
+                        <td colSpan={columns.length} className="px-3 py-4">
+                          <div className="grid grid-cols-2 gap-x-8 gap-y-2 text-sm">
+                            {columns.map(col => (
+                              <div key={String(col.key)} className="contents">
+                                <span className="text-xs font-semibold text-gray-500 uppercase">{col.label}</span>
+                                <span className="text-gray-800 break-word">
+                                  {col.render
+                                    ? col.render(row[col.key], row, idx)
+                                    : String(row[col.key] ?? '—')}
+                                </span>
+                              </div>
+                            ))}
+                          </div>
+                        </td>
+                      </tr>
+                    )}
+                  </React.Fragment>
                 );
               })
             )}

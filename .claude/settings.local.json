@@ -8,7 +8,8 @@
       "Bash(node -e ':*)",
       "Bash(npm install:*)",
       "Bash(ls src/*.css)",
-      "Bash(npx tsc:*)"
+      "Bash(npx tsc:*)",
+      "Bash(npm run:*)"
     ]
   }
 }
