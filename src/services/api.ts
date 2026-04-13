@@ -855,6 +855,21 @@ export const versionApi = {
     }>('Version', params),
 };
 
+// ─── ToDo ─────────────────────────────────────────────────────────────────────
+export const toDoApi = {
+  list: (params?: Record<string, unknown>) =>
+    listResource<{
+      name: string; description: string; status: string;
+      assigned_by: string; assigned_to: string;
+      reference_type: string; reference_name: string;
+      date: string; priority: string; creation: string;
+    }>('ToDo', params),
+  create: (data: unknown) =>
+    createResource('ToDo', data),
+  update: (name: string, data: unknown) =>
+    updateResource('ToDo', name, data),
+};
+
 // ─── Session check ─────────────────────────────────────────────────────────────
 export async function checkSession(): Promise<string | null> {
   try {

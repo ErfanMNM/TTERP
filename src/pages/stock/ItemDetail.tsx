@@ -1,10 +1,10 @@
 import React, { useEffect, useState, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { Package, Warehouse, MessageSquare, Activity, Send, MoreHorizontal, Pencil, Trash2, X, Check } from 'lucide-react';
+import { Package, Warehouse, Activity, Send, Pencil, Trash2, X, Check } from 'lucide-react';
 import PageHeader from '../../components/PageHeader';
 import StatusBadge from '../../components/StatusBadge';
 import PageLoader from '../../components/PageLoader';
-import { itemApi, stockBalanceApi, commentApi, versionApi } from '../../services/api';
+import { itemApi, stockBalanceApi, commentApi, versionApi, toDoApi } from '../../services/api';
 import { formatDate, formatCurrency, formatNumber, cn } from '../../lib/utils';
 
 interface ItemData {
@@ -58,7 +58,6 @@ export default function ItemDetail() {
   const [submitting, setSubmitting] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editContent, setEditContent] = useState('');
-  const [menuOpen, setMenuOpen] = useState<string | null>(null);
   const commentRef = useRef<HTMLTextAreaElement>(null);
 
   useEffect(() => {
@@ -141,14 +140,54 @@ export default function ItemDetail() {
   const handleDeleteComment = async (id: string) => {
     try {
       await commentApi.delete(id);
-      setMenuOpen(null);
       await refreshComments();
     } catch { /* silent */ }
+  };
+
+  const stripHtml = (html: string): string => {
+    return html
+      .replace(/<div class="ql-editor[^"]*">/g, '')
+      .replace(/<[^>]+>/g, '')
+      .replace(/&nbsp;/g, ' ')
+      .replace(/&amp;/g, '&')
+      .replace(/&lt;/g, '<')
+      .replace(/&gt;/g, '>')
+      .replace(/&#39;/g, "'")
+      .replace(/&quot;/g, '"')
+      .replace(/<br\s*\/?>/gi, '\n')
+      .trim();
+  };
+
+  // Parse attachment links from comment content (ERPNext embeds file links in content HTML)
+  const parseAttachmentLink = (content: string): string | null => {
+    const match = content.match(/href="(\/files\/[^"]+)"/);
+    return match ? match[1] : null;
+  };
+
+  // Parse assignment comment: "X assigned Y: description"
+  const parseAssignment = (content: string): { assigner: string; assignee: string; desc: string } | null => {
+    const match = content.match(/^(.+?)\s+assigned\s+(.+?):\s*(.+)$/);
+    if (!match) return null;
+    return { assigner: match[1].trim(), assignee: match[2].trim(), desc: stripHtml(match[3]) };
   };
 
   const parseVersionLabel = (row: VersionRow): { label: string; sub: string } => {
     try {
       const d = JSON.parse(row.data);
+      if (d.changed) {
+        // Field change: "X changed field from Y to Z"
+        return {
+          label: `${d.changed_by} đã thay đổi trường ${d.changed[0]}`,
+          sub: formatDate(row.modified),
+        };
+      }
+      if (d.created) {
+        // Document creation via import
+        return {
+          label: `${d.created_by} đã tạo document`,
+          sub: formatDate(row.modified),
+        };
+      }
       if (d.updater_reference?.label) {
         return { label: d.updater_reference.label, sub: formatDate(row.modified) };
       }
@@ -158,20 +197,59 @@ export default function ItemDetail() {
     }
   };
 
+  // Build activity feed — merge comments, assignments, and version history
   const allActivities = [
-    ...comments.map(c => ({
-      type: 'comment' as const,
-      label: `${c.owner} đã bình luận · ${formatDate(c.creation)}`,
-      content: c.content,
-      time: c.creation,
-      owner: c.owner,
-    })),
+    ...comments.map(c => {
+      // Assignments — stored as Comment but with reference_type=ToDo
+      if (c.comment_type === 'Assignment') {
+        const parsed = parseAssignment(c.content);
+        if (parsed) {
+          return {
+            type: 'assignment' as const,
+            label: `${parsed.assigner} assigned ${parsed.assignee} · ${formatDate(c.creation)}`,
+            desc: parsed.desc,
+            attachment: null,
+            content: stripHtml(c.content),
+            time: c.creation,
+            owner: c.owner,
+          };
+        }
+      }
+
+      // Attachments — check for file links in content
+      const link = parseAttachmentLink(c.content);
+      if (link) {
+        const filename = decodeURIComponent(link.split('/').pop() || link);
+        return {
+          type: 'attachment' as const,
+          label: `${c.owner} đã đính kèm ${filename} · ${formatDate(c.creation)}`,
+          attachment: link,
+          desc: '',
+          content: stripHtml(c.content),
+          time: c.creation,
+          owner: c.owner,
+        };
+      }
+
+      // Regular comments
+      return {
+        type: 'comment' as const,
+        label: `${c.owner} đã bình luận · ${formatDate(c.creation)}`,
+        content: stripHtml(c.content),
+        attachment: null,
+        desc: '',
+        time: c.creation,
+        owner: c.owner,
+      };
+    }),
     ...versions.map(v => {
       const { label } = parseVersionLabel(v);
       return {
         type: 'version' as const,
         label: `${label} · ${formatDate(v.modified)}`,
         content: '',
+        attachment: null,
+        desc: '',
         time: v.modified,
         owner: v.owner,
       };
@@ -341,152 +419,113 @@ export default function ItemDetail() {
       </div>
 
       {/* Comments + Activity */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 mt-4">
-        {/* Comments */}
-        <div className="card">
-          <div className="card-header flex items-center justify-between">
-            <h2 className="text-base font-semibold text-gray-800 flex items-center gap-2">
-              <MessageSquare size={16} />
-              Bình luận
-            </h2>
-            <span className="text-xs text-gray-400">{comments.length}</span>
-          </div>
-          <div className="card-body">
-            {/* Input */}
-            <div className="flex gap-3 items-start">
-              <div className={cn('w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold flex-shrink-0', avatarColor('User'))}>
-                U
-              </div>
-              <div className="flex-1 flex gap-2">
-                <textarea
-                  ref={commentRef}
-                  value={newComment}
-                  onChange={e => setNewComment(e.target.value)}
-                  onKeyDown={e => {
-                    if (e.key === 'Enter' && !e.shiftKey) {
-                      e.preventDefault();
-                      handleAddComment();
-                    }
-                  }}
-                  placeholder="Viết bình luận..."
-                  rows={2}
-                  className="flex-1 resize-none border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-200 focus:border-blue-300"
-                />
-                <button
-                  onClick={handleAddComment}
-                  disabled={!newComment.trim() || submitting}
-                  className="btn btn-primary self-end px-3 py-2 disabled:opacity-50"
-                >
-                  <Send size={14} />
-                </button>
-              </div>
+      <div className="card mt-4">
+        <div className="card-header flex items-center justify-between">
+          <h2 className="text-base font-semibold text-gray-800 flex items-center gap-2">
+            <Activity size={16} />
+            Hoạt động
+          </h2>
+          <span className="text-xs text-gray-400">{allActivities.length}</span>
+        </div>
+        <div className="card-body">
+          {/* Comment input */}
+          <div className="flex gap-3 items-start mb-5">
+            <div className={cn('w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold flex-shrink-0', avatarColor('User'))}>
+              U
             </div>
+            <div className="flex-1 flex gap-2">
+              <textarea
+                ref={commentRef}
+                value={newComment}
+                onChange={e => setNewComment(e.target.value)}
+                onKeyDown={e => {
+                  if (e.key === 'Enter' && !e.shiftKey) {
+                    e.preventDefault();
+                    handleAddComment();
+                  }
+                }}
+                placeholder="Viết bình luận..."
+                rows={2}
+                className="flex-1 resize-none border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-200 focus:border-blue-300"
+              />
+              <button
+                onClick={handleAddComment}
+                disabled={!newComment.trim() || submitting}
+                className="btn btn-primary self-end px-3 py-2 disabled:opacity-50"
+              >
+                <Send size={14} />
+              </button>
+            </div>
+          </div>
 
-            {/* Comment list */}
-            <div className="mt-4 space-y-3">
-              {comments.length === 0 ? (
-                <p className="text-center py-6 text-gray-400 text-sm">Chưa có bình luận nào</p>
-              ) : (
-                comments.map(c => (
-                  <div key={c.name} className="group flex gap-3">
-                    <div className={cn('w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold flex-shrink-0', avatarColor(c.owner))}>
-                      {initials(c.owner)}
+          {/* Activity timeline */}
+          {allActivities.length === 0 ? (
+            <p className="text-center py-4 text-gray-400 text-sm">Chưa có hoạt động nào</p>
+          ) : (
+            <div className="relative">
+              <div className="absolute left-3.5 top-2 bottom-2 w-px bg-gray-200" />
+              <div className="space-y-4">
+                {allActivities.map((item, i) => (
+                  <div key={i} className="flex items-start gap-3 pl-1 relative">
+                    <div className={cn('w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold flex-shrink-0', avatarColor(item.owner))}>
+                      {initials(item.owner)}
                     </div>
                     <div className="flex-1 min-w-0">
-                      <div className="flex items-center justify-between gap-2">
-                        <div className="flex items-baseline gap-2 min-w-0">
-                          <span className="text-sm font-semibold text-gray-800">{c.owner}</span>
-                          <span className="text-xs text-gray-400 flex-shrink-0">{formatDate(c.creation)}</span>
-                        </div>
-                        {/* Menu button */}
-                        <button
-                          onClick={() => setMenuOpen(menuOpen === c.name ? null : c.name)}
-                          className="opacity-0 group-hover:opacity-100 transition-opacity p-1 rounded hover:bg-gray-100 text-gray-400"
-                        >
-                          <MoreHorizontal size={14} />
-                        </button>
-                      </div>
+                      {/* Label */}
+                      <p className="text-sm text-gray-700 leading-snug">{item.label}</p>
 
-                      {/* Dropdown menu */}
-                      {menuOpen === c.name && (
-                        <div className="z-20 mt-1 bg-white border border-gray-200 rounded-xl shadow-lg py-1 min-w-32">
-                          <button
-                            onClick={() => { setEditingId(c.name); setEditContent(c.content); setMenuOpen(null); }}
-                            className="w-full text-left px-3 py-2 text-sm text-gray-700 hover:bg-gray-50 flex items-center gap-2"
-                          >
-                            <Pencil size={12} /> Sửa
-                          </button>
-                          <button
-                            onClick={() => handleDeleteComment(c.name)}
-                            className="w-full text-left px-3 py-2 text-sm text-red-600 hover:bg-red-50 flex items-center gap-2"
-                          >
-                            <Trash2 size={12} /> Xóa
-                          </button>
-                        </div>
+                      {/* Attachment preview */}
+                      {item.type === 'attachment' && item.attachment && (
+                        <a
+                          href={item.attachment}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="mt-1.5 inline-flex items-center gap-2 px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg text-sm text-blue-600 hover:bg-gray-100 transition-colors"
+                        >
+                          <span className="truncate max-w-xs">{decodeURIComponent(item.attachment.split('/').pop() || '')}</span>
+                        </a>
                       )}
 
-                      {/* Content */}
-                      {editingId === c.name ? (
-                        <div className="mt-1">
-                          <textarea
-                            value={editContent}
-                            onChange={e => setEditContent(e.target.value)}
-                            rows={3}
-                            className="w-full resize-none border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-200 focus:border-blue-300"
-                          />
-                          <div className="flex gap-2 mt-1.5">
-                            <button onClick={() => handleEditComment(c.name)} className="btn btn-primary px-3 py-1 text-xs flex items-center gap-1">
-                              <Check size={12} /> Lưu
-                            </button>
-                            <button onClick={() => setEditingId(null)} className="btn btn-secondary px-3 py-1 text-xs flex items-center gap-1">
-                              <X size={12} /> Hủy
-                            </button>
-                          </div>
+                      {/* Assignment description */}
+                      {item.type === 'assignment' && item.desc && (
+                        <p className="mt-1 text-sm text-gray-600 p-2 bg-gray-50 rounded-lg">{item.desc}</p>
+                      )}
+
+                      {/* Comment content */}
+                      {item.type === 'comment' && item.content && (
+                        <p className="mt-1 text-sm text-gray-600 p-2 bg-gray-50 rounded-lg whitespace-pre-wrap">{item.content}</p>
+                      )}
+
+                      {/* Edit/Delete actions */}
+                      {item.type === 'comment' && (
+                        <div className="flex items-center gap-1 mt-1">
+                          <button
+                            onClick={() => {
+                              const c = comments.find(cm => cm.creation === item.time);
+                              if (c) { setEditingId(c.name); setEditContent(c.content); }
+                            }}
+                            className="text-xs text-gray-400 hover:text-blue-600 transition-colors"
+                          >
+                            Sửa
+                          </button>
+                          <span className="text-xs text-gray-300">·</span>
+                          <button
+                            onClick={() => {
+                              const c = comments.find(cm => cm.creation === item.time);
+                              if (c) handleDeleteComment(c.name);
+                            }}
+                            className="text-xs text-gray-400 hover:text-red-600 transition-colors"
+                          >
+                            Xóa
+                          </button>
                         </div>
-                      ) : (
-                        <p className="text-sm text-gray-600 mt-0.5 whitespace-pre-wrap">{c.content}</p>
                       )}
                     </div>
                   </div>
-                ))
-              )}
-            </div>
-          </div>
-        </div>
-
-        {/* Activity */}
-        <div className="card">
-          <div className="card-header flex items-center justify-between">
-            <h2 className="text-base font-semibold text-gray-800 flex items-center gap-2">
-              <Activity size={16} />
-              Hoạt động
-            </h2>
-            <span className="text-xs text-gray-400">{allActivities.length}</span>
-          </div>
-          <div className="card-body">
-            {allActivities.length === 0 ? (
-              <p className="text-center py-6 text-gray-400 text-sm">Chưa có hoạt động nào</p>
-            ) : (
-              <div className="relative">
-                <div className="absolute left-3.5 top-2 bottom-2 w-px bg-gray-200" />
-                <div className="space-y-4">
-                  {allActivities.map((item, i) => (
-                    <div key={i} className="flex items-start gap-3 pl-1 relative">
-                      <div className={cn('w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold flex-shrink-0', avatarColor(item.owner))}>
-                        {initials(item.owner)}
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <p className="text-sm text-gray-700 leading-snug">{item.label}</p>
-                        {item.content && (
-                          <p className="text-sm text-gray-600 mt-1 p-2 bg-gray-50 rounded-lg">{item.content}</p>
-                        )}
-                      </div>
-                    </div>
-                  ))}
-                </div>
+                ))}
               </div>
-            )}
-          </div>
+            </div>
+          )}
         </div>
       </div>
     </div>
