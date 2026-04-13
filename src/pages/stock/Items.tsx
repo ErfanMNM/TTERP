@@ -114,7 +114,7 @@ export default function Items() {
   ];
 
   return (
-    <div className="max-w-6xl mx-auto page-enter">
+    <div className="max-w-6xl mx-auto page-enter flex flex-col h-screen">
       <PageHeader
         title="Vật tư"
         subtitle={`${total} vật tư`}
@@ -129,9 +129,7 @@ export default function Items() {
         }
       />
 
-      {loading && data.length === 0 ? (
-        <PageLoader rows={8} />
-      ) : (
+      <div className="flex-1 min-h-0">
         <DataTable
           columns={columns}
           data={data}
@@ -147,10 +145,11 @@ export default function Items() {
           onSearchChange={(val) => { setSearch(val); setPage(1); }}
           showSearch={true}
           showPagination={true}
+          stickyHeader={true}
           emptyText="Chưa có vật tư nào"
           emptyIcon={<Package size={32} className="text-gray-300" />}
         />
-      )}
+      </div>
 
       <button
         onClick={() => navigate('/stock/items/new')}

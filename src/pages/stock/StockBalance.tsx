@@ -145,7 +145,7 @@ export default function StockBalance() {
   ];
 
   return (
-    <div className="max-w-6xl mx-auto page-enter">
+    <div className="max-w-6xl mx-auto page-enter flex flex-col h-screen">
       <PageHeader
         title="Tồn kho"
         subtitle="Báo cáo số dư tồn kho theo vật tư và kho"
@@ -199,9 +199,7 @@ export default function StockBalance() {
         </div>
       )}
 
-      {loading ? (
-        <PageLoader rows={8} />
-      ) : (
+      <div className="flex-1 min-h-0">
         <DataTable
           columns={columns}
           data={data}
@@ -219,7 +217,7 @@ export default function StockBalance() {
           emptyText="Không có dữ liệu tồn kho"
           emptyIcon={<BarChart3 size={32} className="text-gray-300" />}
         />
-      )}
+      </div>
     </div>
   );
 }

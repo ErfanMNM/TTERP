@@ -81,9 +81,9 @@ export default function DataTable({
   const endRow = total ? Math.min(page * pageSize, total) : Math.min(page * pageSize, sorted.length);
 
   return (
-    <div className="flex flex-col min-h-0" style={{ flex: '1 1 auto', minHeight: 0 }}>
-      {/* Toolbar */}
-      <div className="flex items-center gap-2 flex-wrap">
+    <div className={cn('flex flex-col', stickyHeader ? 'h-full' : '')}>
+      {/* Toolbar — nằm ngoài scroll area, luôn thấy */}
+      <div className="flex items-center gap-2 flex-wrap flex-shrink-0 mb-2">
         {showSearch && onSearchChange && (
           <div className="relative flex-1 min-w-48">
             <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
@@ -98,9 +98,9 @@ export default function DataTable({
         {actions && <div className="flex items-center gap-2">{actions}</div>}
       </div>
 
-      {/* Table scroll area */}
-      <div className={cn('flex-1 min-h-0', stickyHeader ? 'max-h-[60vh] overflow-auto' : 'overflow-visible')}>
-        <div className="table-container">
+      {/* Table — scroll bên trong khi header/pagination cố định */}
+      <div className={cn('flex-1 min-h-0', stickyHeader ? 'max-h-[calc(100vh-220px)]' : '')}>
+        <div className="table-container h-full">
           <table className={cn('data-table', stickyHeader && 'sticky-table')}>
             <thead>
               <tr>
@@ -202,7 +202,7 @@ export default function DataTable({
 
       {/* Pagination — luôn thấy bên dưới */}
       {showPagination && !loading && sorted.length > 0 && (
-        <div className="flex items-center justify-between flex-wrap gap-2 px-1 flex-shrink-0">
+        <div className="flex items-center justify-between flex-wrap gap-2 px-1 flex-shrink-0 mt-2">
           <p className="text-xs text-gray-500">
             {total
               ? `Hiển thị ${startRow}–${endRow} của ${total} bản ghi`

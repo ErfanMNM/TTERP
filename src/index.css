@@ -98,7 +98,11 @@
 
   /* Tables */
   .table-container {
-    @apply w-full overflow-auto rounded-2xl border border-gray-200 bg-white shadow-sm;
+    @apply w-full rounded-2xl border border-gray-200 bg-white shadow-sm;
+    overflow: auto;
+  }
+  .table-container.h-full {
+    height: 100%;
   }
   .data-table {
     @apply w-full text-sm;
