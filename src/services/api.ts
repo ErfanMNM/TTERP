@@ -8,15 +8,35 @@ const api = axios.create({
   },
 });
 
-// Remove Content-Type for GET requests (ERPNext rejects GET with Content-Type: application/json)
+// ERPNext /api/method/ expects x-www-form-urlencoded, not JSON
 api.interceptors.request.use((config) => {
   if (config.method === 'get' || config.method === 'GET') {
     delete config.headers['Content-Type'];
-  } else {
-    config.headers['Content-Type'] = 'application/json';
   }
+  // Don't set Content-Type here — let individual requests set it
   return config;
 });
+
+// ─── Reportview ───────────────────────────────────────────────────────────────
+// ERPNext's frappe.desk.reportview.get_count and get — uses fetch directly
+// to avoid axios body-transform quirks (100-continue, JSON-stringifying, etc.)
+async function reportview<T>(method: string, params: Record<string, unknown>): Promise<T> {
+  const body = new URLSearchParams();
+  for (const [k, v] of Object.entries(params)) {
+    body.set(k, typeof v === 'string' ? v : JSON.stringify(v));
+  }
+  const res = await fetch(`/api/method/${method}`, {
+    method: 'POST',
+    credentials: 'include',
+    headers: {
+      'Content-Type': 'application/x-www-form-urlencoded',
+      'Accept': 'application/json',
+      'X-Requested-With': 'XMLHttpRequest',
+    },
+    body,
+  });
+  return res.json();
+}
 
 // ─── Auth ────────────────────────────────────────────────────────────────────
 export const authApi = {
@@ -113,6 +133,59 @@ export const itemApi = {
   search: (txt: string) =>
     callMethod<{ message: { value: string; description: string }[] }>('erpnext.stock.get_item_details', {
       item_code: txt,
+    }),
+
+  // Lấy tổng số Item
+  getCount: (params: {
+    doctype: string;
+    filters?: unknown[];
+    fields?: unknown[];
+    distinct?: boolean;
+    limit?: number;
+  }) =>
+    reportview<{ message: number }>('frappe.desk.reportview.get_count', {
+      doctype: params.doctype,
+      filters: JSON.stringify(params.filters ?? [['Item', 'disabled', '=', 0]]),
+      fields: JSON.stringify(params.fields ?? []),
+      distinct: params.distinct ?? false,
+      limit: params.limit ?? 1001,
+    }),
+
+  // Lấy danh sách Item
+  getList: (params: {
+    pageLength?: number;
+    start?: number;
+    search?: string;
+    filters?: unknown[];
+  }) =>
+    reportview<{
+      message: Array<{
+        name: string;
+        item_name: string;
+        item_code: string;
+        item_group: string;
+        stock_uom: string;
+        image?: string;
+        disabled: number;
+      }>;
+    }>('frappe.desk.reportview.get', {
+      doctype: 'Item',
+      fields: JSON.stringify([
+        '`tabItem`.`name`',
+        '`tabItem`.`item_name`',
+        '`tabItem`.`item_code`',
+        '`tabItem`.`item_group`',
+        '`tabItem`.`stock_uom`',
+        '`tabItem`.`image`',
+        '`tabItem`.`disabled`',
+      ]),
+      filters: JSON.stringify(params.filters ?? [['Item', 'disabled', '=', 0]]),
+      order_by: '`tabItem`.`creation` desc',
+      start: params.start ?? 0,
+      page_length: params.pageLength ?? 20,
+      view: 'List',
+      group_by: '',
+      with_comment_count: false,
     }),
 };
 

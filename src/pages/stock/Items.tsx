@@ -4,9 +4,7 @@ import { Plus, Package } from 'lucide-react';
 import PageHeader from '../../components/PageHeader';
 import DataTable from '../../components/DataTable';
 import StatusBadge from '../../components/StatusBadge';
-import PageLoader from '../../components/PageLoader';
-import { itemApi, stockBalanceApi } from '../../services/api';
-import { formatCurrency, formatNumber } from '../../lib/utils';
+import { itemApi } from '../../services/api';
 
 interface ItemRow {
   name: string;
@@ -14,9 +12,8 @@ interface ItemRow {
   item_code: string;
   item_group: string;
   stock_uom: string;
+  image?: string;
   disabled: number;
-  standard_rate?: number;
-  warehouses?: string[];
 }
 
 export default function Items() {
@@ -29,80 +26,72 @@ export default function Items() {
   const [search, setSearch] = useState('');
 
   useEffect(() => {
+    let cancelled = false;
     setLoading(true);
-    const params: Record<string, unknown> = {
-      fields: JSON.stringify([
-        'name', 'item_name', 'item_code', 'item_group', 'stock_uom',
-        'disabled', 'standard_rate', 'valuation_rate',
-      ]),
-      limit_page_length: pageSize,
-      limit_start: (page - 1) * pageSize,
-      order_by: 'modified desc',
-    };
-    if (search) {
-      params.filters = JSON.stringify([['Item', 'item_name', 'like', '%' + search + '%']]);
-    }
-    itemApi.list(params)
-      .then(async res => {
-        const items: ItemRow[] = res.data?.data || [];
+
+    const fetchItems = async () => {
+      try {
+        // 1. Lấy tổng số Item
+        const filters = search
+          ? [['Item', 'item_name', 'like', '%' + search + '%']]
+          : [['Item', 'disabled', '=', 0]];
+
+        const [countRes, listRes] = await Promise.all([
+          itemApi.getCount({ doctype: 'Item', filters, fields: [], distinct: false, limit: 1001 }),
+          itemApi.getList({
+            pageLength: pageSize,
+            start: (page - 1) * pageSize,
+            filters,
+          }),
+        ]);
+
+        if (cancelled) return;
+
+        const totalCount = countRes?.message ?? 0;
+        const raw = listRes?.message as { keys?: string[]; values?: unknown[][] } | undefined;
+        let items: ItemRow[] = [];
+        if (raw?.keys && raw?.values) {
+          items = raw.values.map((row: unknown[]) => {
+            const item: Record<string, unknown> = {};
+            raw.keys!.forEach((col: string, i: number) => {
+              item[col] = row[i];
+            });
+            return item as unknown as ItemRow;
+          });
+        }
+
+        setTotal(totalCount);
         setData(items);
-        setTotal(res.data?.count || 0);
+      } catch {
+        if (!cancelled) setData([]);
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    };
 
-        // Fetch warehouses from Bin for all items on this page
-        const stockRes = await stockBalanceApi.list({ limit: 10000 });
-        const stockBins: { item_code: string; warehouse: string }[] = Array.isArray(stockRes.message)
-          ? stockRes.message : [];
-
-        // Build warehouses map per item_code
-        const whMap: Record<string, string[]> = {};
-        stockBins.forEach(b => {
-          const key = b.item_code;
-          if (!whMap[key]) whMap[key] = [];
-          if (!whMap[key].includes(b.warehouse)) whMap[key].push(b.warehouse);
-        });
-
-        setData(items.map(item => ({
-          ...item,
-          warehouses: whMap[item.item_code || item.name] || [],
-        })));
-      })
-      .catch(() => setData([]))
-      .finally(() => setLoading(false));
+    fetchItems();
+    return () => { cancelled = true; };
   }, [page, pageSize, search]);
 
   const columns = [
+    {
+      key: 'image',
+      label: '',
+      width: '48px',
+      render: (val: unknown) =>
+        val ? (
+          <img src={val as string} alt="" className="w-8 h-8 object-cover rounded border" />
+        ) : (
+          <div className="w-8 h-8 rounded border border-gray-200 bg-gray-50 flex items-center justify-center">
+            <Package size={14} className="text-gray-300" />
+          </div>
+        ),
+    },
     { key: 'name', label: 'Mã vật tư', sortable: true, minWidth: '140px' },
-    { key: 'item_name', label: 'Tên vật tư', sortable: true, minWidth: '180px' },
+    { key: 'item_name', label: 'Tên vật tư', sortable: true, minWidth: '200px' },
     { key: 'item_code', label: 'Mã SKU', sortable: true, minWidth: '120px' },
     { key: 'item_group', label: 'Nhóm', sortable: true, minWidth: '130px' },
     { key: 'stock_uom', label: 'ĐVT', sortable: true, width: '80px' },
-    {
-      key: 'warehouses',
-      label: 'Kho',
-      minWidth: '150px',
-      render: (val: unknown) => {
-        const wh = val as string[];
-        if (!wh || wh.length === 0) return <span className="text-gray-400">—</span>;
-        return (
-          <div className="flex flex-wrap gap-1">
-            {wh.map((w, i) => (
-              <span key={i} className="chip chip-gray text-xs">{w}</span>
-            ))}
-          </div>
-        );
-      },
-    },
-    {
-      key: 'standard_rate',
-      label: 'Đơn giá',
-      sortable: true,
-      width: '130px',
-      render: (val: unknown) => (
-        <span className="text-gray-800 font-medium">
-          {Number(val) > 0 ? formatCurrency(Number(val)) : <span className="text-gray-400">—</span>}
-        </span>
-      ),
-    },
     {
       key: 'disabled',
       label: 'Trạng thái',
