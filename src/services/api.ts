@@ -13,29 +13,78 @@ api.interceptors.request.use((config) => {
   if (config.method === 'get' || config.method === 'GET') {
     delete config.headers['Content-Type'];
   }
-  // Don't set Content-Type here — let individual requests set it
+  // ERPNext doesn't support 100-continue; remove it to avoid 417
+  delete config.headers['Expect'];
   return config;
 });
 
 // ─── Reportview ───────────────────────────────────────────────────────────────
 // ERPNext's frappe.desk.reportview.get_count and get — uses fetch directly
 // to avoid axios body-transform quirks (100-continue, JSON-stringifying, etc.)
-async function reportview<T>(method: string, params: Record<string, unknown>): Promise<T> {
+export async function reportview<T>(method: string, params: Record<string, unknown>): Promise<T> {
   const body = new URLSearchParams();
   for (const [k, v] of Object.entries(params)) {
     body.set(k, typeof v === 'string' ? v : JSON.stringify(v));
   }
+  const headers = new Headers({
+    'Content-Type': 'application/x-www-form-urlencoded',
+    'Accept': 'application/json',
+    'X-Requested-With': 'XMLHttpRequest',
+  });
+  // Ensure no 100-continue expectation header
+  headers.set('Expect', '');
+
   const res = await fetch(`/api/method/${method}`, {
     method: 'POST',
     credentials: 'include',
-    headers: {
-      'Content-Type': 'application/x-www-form-urlencoded',
-      'Accept': 'application/json',
-      'X-Requested-With': 'XMLHttpRequest',
-    },
+    headers,
     body,
   });
-  return res.json();
+
+  // ERPNext may return error as JSON with "exception" field
+  const data = await res.json();
+  if (data?.exception) {
+    throw new Error(data.message || data.exception || 'API Error');
+  }
+  return data;
+}
+
+// ─── getDoc — load full doctype document + docinfo in one call ──────
+export interface DocInfo {
+  user_info: Record<string, unknown>;
+  comments: Array<{ name: string; content: string; owner: string; creation: string; comment_type: string }>;
+  attachments: Array<{ name: string; file_name: string; file_url: string; is_private: number }>;
+  shared: Array<Record<string, unknown>>;
+  assignment_logs: Array<Record<string, unknown>>;
+  attachment_logs: Array<Record<string, unknown>>;
+  versions: Array<{ name: string; owner: string; creation: string; data: string }>;
+  assignments: Array<{ name: string; owner: string; description: string }>;
+}
+
+export interface GetDocResult<T = Record<string, unknown>> {
+  docs: T[];
+  docinfo: DocInfo;
+  _link_titles: Record<string, unknown>;
+}
+
+export async function getDoc<T = Record<string, unknown>>(doctype: string, name: string): Promise<GetDocResult<T>> {
+  const params = new URLSearchParams({ doctype, name });
+  const headers = new Headers({
+    'Content-Type': 'application/x-www-form-urlencoded',
+    'Accept': 'application/json',
+    'X-Requested-With': 'XMLHttpRequest',
+  });
+  headers.set('Expect', '');
+
+  const res = await fetch(`/api/method/frappe.desk.form.load.getdoc?${params}`, {
+    method: 'POST',
+    credentials: 'include',
+    headers,
+  });
+
+  const data = await res.json();
+  if (data?.exception) throw new Error(data.message || data.exception);
+  return data;
 }
 
 // Generic getCount — works for any doctype
@@ -855,15 +904,70 @@ export const versionApi = {
     }>('Version', params),
 };
 
+// ─── searchLink — generic autocomplete/search by doctype ────────────────────
+export async function searchLink(
+  doctype: string,
+  txt: string,
+  filters?: Record<string, string>,
+): Promise<Array<{ value: string; description: string; label: string }>> {
+  const params = new URLSearchParams({ doctype, txt });
+  if (filters) {
+    params.set('filters', JSON.stringify(filters));
+  }
+  const headers = new Headers({
+    'Accept': 'application/json',
+    'X-Requested-With': 'XMLHttpRequest',
+  });
+  headers.set('Expect', '');
+  const res = await fetch(`/api/method/frappe.desk.search.search_link?${params}`, {
+    method: 'GET',
+    credentials: 'include',
+    headers,
+  });
+  const data = await res.json();
+  if (data?.exception) throw new Error(data.message || data.exception);
+  return data.message ?? [];
+}
+
 // ─── ToDo ─────────────────────────────────────────────────────────────────────
 export const toDoApi = {
   list: (params?: Record<string, unknown>) =>
     listResource<{
       name: string; description: string; status: string;
-      assigned_by: string; assigned_to: string;
+      assigned_by: string;
       reference_type: string; reference_name: string;
       date: string; priority: string; creation: string;
     }>('ToDo', params),
+  getList: (params: Record<string, unknown>) =>
+    reportview<{
+      message: Array<{
+        name: string; description: string; status: string;
+        assigned_by: string; _assign: string;
+        reference_type: string; reference_name: string;
+        date: string; priority: string; creation: string;
+      }>;
+    }>('frappe.desk.reportview.get', {
+      doctype: 'ToDo',
+      fields: JSON.stringify([
+        '`tabToDo`.`name`',
+        '`tabToDo`.`description`',
+        '`tabToDo`.`status`',
+        '`tabToDo`.`assigned_by`',
+        '`tabToDo`.`_assign`',
+        '`tabToDo`.`reference_type`',
+        '`tabToDo`.`reference_name`',
+        '`tabToDo`.`date`',
+        '`tabToDo`.`priority`',
+        '`tabToDo`.`creation`',
+      ]),
+      ...(params.filters ? { filters: params.filters } : {}),
+      order_by: '`tabToDo`.`creation` desc',
+      start: (params.start as number) ?? 0,
+      page_length: (params.page_length as number) ?? 50,
+      view: 'List',
+      group_by: '',
+      with_comment_count: false,
+    }),
   create: (data: unknown) =>
     createResource('ToDo', data),
   update: (name: string, data: unknown) =>
