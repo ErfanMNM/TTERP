@@ -9,7 +9,8 @@
       "Bash(npm install:*)",
       "Bash(ls src/*.css)",
       "Bash(npx tsc:*)",
-      "Bash(npm run:*)"
+      "Bash(npm run:*)",
+      "WebFetch(domain:erp.mte.vn)"
     ]
   }
 }

@@ -5,7 +5,8 @@ import PageHeader from '../../components/PageHeader';
 import DataTable from '../../components/DataTable';
 import StatusBadge from '../../components/StatusBadge';
 import PageLoader from '../../components/PageLoader';
-import { itemApi } from '../../services/api';
+import { itemApi, stockBalanceApi } from '../../services/api';
+import { formatCurrency, formatNumber } from '../../lib/utils';
 
 interface ItemRow {
   name: string;
@@ -14,6 +15,8 @@ interface ItemRow {
   item_group: string;
   stock_uom: string;
   disabled: number;
+  standard_rate?: number;
+  warehouses?: string[];
 }
 
 export default function Items() {
@@ -28,7 +31,10 @@ export default function Items() {
   useEffect(() => {
     setLoading(true);
     const params: Record<string, unknown> = {
-      fields: JSON.stringify(['name', 'item_name', 'item_code', 'item_group', 'stock_uom', 'disabled']),
+      fields: JSON.stringify([
+        'name', 'item_name', 'item_code', 'item_group', 'stock_uom',
+        'disabled', 'standard_rate', 'valuation_rate',
+      ]),
       limit_page_length: pageSize,
       limit_start: (page - 1) * pageSize,
       order_by: 'modified desc',
@@ -37,9 +43,28 @@ export default function Items() {
       params.filters = JSON.stringify([['Item', 'item_name', 'like', '%' + search + '%']]);
     }
     itemApi.list(params)
-      .then(res => {
-        setData(res.data?.data || []);
+      .then(async res => {
+        const items: ItemRow[] = res.data?.data || [];
+        setData(items);
         setTotal(res.data?.count || 0);
+
+        // Fetch warehouses from Bin for all items on this page
+        const stockRes = await stockBalanceApi.list({ limit: 10000 });
+        const stockBins: { item_code: string; warehouse: string }[] = Array.isArray(stockRes.message)
+          ? stockRes.message : [];
+
+        // Build warehouses map per item_code
+        const whMap: Record<string, string[]> = {};
+        stockBins.forEach(b => {
+          const key = b.item_code;
+          if (!whMap[key]) whMap[key] = [];
+          if (!whMap[key].includes(b.warehouse)) whMap[key].push(b.warehouse);
+        });
+
+        setData(items.map(item => ({
+          ...item,
+          warehouses: whMap[item.item_code || item.name] || [],
+        })));
       })
       .catch(() => setData([]))
       .finally(() => setLoading(false));
@@ -51,6 +76,33 @@ export default function Items() {
     { key: 'item_code', label: 'Mã SKU', sortable: true, minWidth: '120px' },
     { key: 'item_group', label: 'Nhóm', sortable: true, minWidth: '130px' },
     { key: 'stock_uom', label: 'ĐVT', sortable: true, width: '80px' },
+    {
+      key: 'warehouses',
+      label: 'Kho',
+      minWidth: '150px',
+      render: (val: unknown) => {
+        const wh = val as string[];
+        if (!wh || wh.length === 0) return <span className="text-gray-400">—</span>;
+        return (
+          <div className="flex flex-wrap gap-1">
+            {wh.map((w, i) => (
+              <span key={i} className="chip chip-gray text-xs">{w}</span>
+            ))}
+          </div>
+        );
+      },
+    },
+    {
+      key: 'standard_rate',
+      label: 'Đơn giá',
+      sortable: true,
+      width: '130px',
+      render: (val: unknown) => (
+        <span className="text-gray-800 font-medium">
+          {Number(val) > 0 ? formatCurrency(Number(val)) : <span className="text-gray-400">—</span>}
+        </span>
+      ),
+    },
     {
       key: 'disabled',
       label: 'Trạng thái',

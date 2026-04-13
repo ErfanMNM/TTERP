@@ -1,11 +1,11 @@
 import React, { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { Package } from 'lucide-react';
+import { Package, Warehouse } from 'lucide-react';
 import PageHeader from '../../components/PageHeader';
 import StatusBadge from '../../components/StatusBadge';
 import PageLoader from '../../components/PageLoader';
-import { itemApi } from '../../services/api';
-import { formatDate, formatCurrency, cn } from '../../lib/utils';
+import { itemApi, stockBalanceApi } from '../../services/api';
+import { formatDate, formatCurrency, formatNumber, cn } from '../../lib/utils';
 
 interface ItemData {
   name: string;
@@ -23,16 +23,31 @@ interface ItemData {
   [key: string]: unknown;
 }
 
+interface StockRow {
+  warehouse: string;
+  actual_qty: number;
+  projected_qty: number;
+}
+
 export default function ItemDetail() {
   const { name } = useParams<{ name: string }>();
   const navigate = useNavigate();
   const [data, setData] = useState<ItemData | null>(null);
   const [loading, setLoading] = useState(true);
+  const [stockRows, setStockRows] = useState<StockRow[]>([]);
 
   useEffect(() => {
     if (!name) return;
-    itemApi.get(name)
-      .then(res => setData(res.data?.data || res.data))
+    setLoading(true);
+    Promise.all([
+      itemApi.get(name),
+      stockBalanceApi.list({ item_code: name, limit: 100 }),
+    ])
+      .then(([itemRes, stockRes]) => {
+        setData(itemRes.data?.data || itemRes.data);
+        const bins: StockRow[] = Array.isArray(stockRes.message) ? stockRes.message : [];
+        setStockRows(bins);
+      })
       .catch(() => setData(null))
       .finally(() => setLoading(false));
   }, [name]);
@@ -152,6 +167,44 @@ export default function ItemDetail() {
           </div>
         </div>
       )}
+
+      {/* Stock by warehouse */}
+      <div className="card">
+        <div className="card-header">
+          <h2 className="text-base font-semibold text-gray-800 flex items-center gap-2">
+            <Warehouse size={16} />
+            Tồn kho theo kho
+          </h2>
+        </div>
+        <div className="card-body p-0">
+          {stockRows.length === 0 ? (
+            <p className="text-center py-8 text-gray-400 text-sm">Không có dữ liệu tồn kho</p>
+          ) : (
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="bg-slate-100 text-left">
+                  <th className="px-4 py-3 text-xs font-semibold uppercase tracking-wide text-gray-600">Kho</th>
+                  <th className="px-4 py-3 text-xs font-semibold uppercase tracking-wide text-gray-600 text-right">Tồn thực</th>
+                  <th className="px-4 py-3 text-xs font-semibold uppercase tracking-wide text-gray-600 text-right">Dự kiến</th>
+                </tr>
+              </thead>
+              <tbody>
+                {stockRows.map((row, i) => (
+                  <tr key={i} className={cn('border-b border-gray-100', i % 2 === 1 && 'bg-gray-50/50')}>
+                    <td className="px-4 py-2.5 text-gray-800">{row.warehouse}</td>
+                    <td className={cn('px-4 py-2.5 text-right font-medium', row.actual_qty < 0 && 'text-red-600')}>
+                      {formatNumber(row.actual_qty, 2)}
+                    </td>
+                    <td className={cn('px-4 py-2.5 text-right font-medium', row.projected_qty < 0 && 'text-red-600')}>
+                      {formatNumber(row.projected_qty, 2)}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
+        </div>
+      </div>
     </div>
   );
 }
