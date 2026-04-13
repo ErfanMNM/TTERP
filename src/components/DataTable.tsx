@@ -34,6 +34,8 @@ interface DataTableProps {
   actions?: React.ReactNode;
   showPagination?: boolean;
   showSearch?: boolean;
+  /** Khi bật, table body scroll trong khi header và footer (pagination) luôn thấy trên màn hình */
+  stickyHeader?: boolean;
 }
 
 export default function DataTable({
@@ -41,6 +43,7 @@ export default function DataTable({
   rowKey, onRowClick, page = 1, pageSize = 20, total, onPageChange,
   onPageSizeChange, pageSizeOptions = [20, 50, 100],
   searchValue, onSearchChange, actions, showPagination = true, showSearch = true,
+  stickyHeader = false,
 }: DataTableProps) {
   const [sortKey, setSortKey] = useState<string | null>(null);
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc');
@@ -95,109 +98,111 @@ export default function DataTable({
         {actions && <div className="flex items-center gap-2">{actions}</div>}
       </div>
 
-      {/* Table */}
-      <div className="table-container">
-        <table className="data-table">
-          <thead>
-            <tr>
-              {columns.map((col, i) => (
-                <th key={String(col.key)} style={{ width: col.width }}>
-                  <div className="flex flex-col">
-                    <div
-                      className={cn('flex items-center gap-1.5', col.sortable && 'cursor-pointer hover:text-gray-800 select-none')}
-                      onClick={() => col.sortable && handleSort(String(col.key))}
-                    >
-                      <span>{col.label}</span>
-                      {col.sortable && sortKey === String(col.key) && (
-                        sortDir === 'asc' ? <ArrowUp size={12} /> : <ArrowDown size={12} />
+      {/* Table scroll area */}
+      <div className={cn('flex-1 min-h-0', stickyHeader ? 'max-h-[60vh] overflow-auto' : 'overflow-visible')}>
+        <div className="table-container">
+          <table className={cn('data-table', stickyHeader && 'sticky-table')}>
+            <thead>
+              <tr>
+                {columns.map((col, i) => (
+                  <th key={String(col.key)} style={{ width: col.width }}>
+                    <div className="flex flex-col">
+                      <div
+                        className={cn('flex items-center gap-1.5', col.sortable && 'cursor-pointer hover:text-gray-800 select-none')}
+                        onClick={() => col.sortable && handleSort(String(col.key))}
+                      >
+                        <span>{col.label}</span>
+                        {col.sortable && sortKey === String(col.key) && (
+                          sortDir === 'asc' ? <ArrowUp size={12} /> : <ArrowDown size={12} />
+                        )}
+                      </div>
+                      {showSearch && (
+                        <input
+                          className="col-search"
+                          placeholder="Lọc..."
+                          value={colSearch[String(col.key)] || ''}
+                          onChange={e => setColSearch(p => ({ ...p, [String(col.key)]: e.target.value }))}
+                        />
                       )}
                     </div>
-                    {showSearch && (
-                      <input
-                        className="col-search"
-                        placeholder="Lọc..."
-                        value={colSearch[String(col.key)] || ''}
-                        onChange={e => setColSearch(p => ({ ...p, [String(col.key)]: e.target.value }))}
-                      />
-                    )}
-                  </div>
-                </th>
-              ))}
-            </tr>
-          </thead>
-          <tbody>
-            {loading ? (
-              Array.from({ length: 5 }).map((_, i) => (
-                <tr key={i}>
-                  {columns.map(col => (
-                    <td key={String(col.key)}>
-                      <div className="skeleton h-5 w-full rounded" />
-                    </td>
-                  ))}
-                </tr>
-              ))
-            ) : sorted.length === 0 ? (
-              <tr>
-                <td colSpan={columns.length} className="text-center py-12 text-gray-400">
-                  <div className="flex flex-col items-center gap-2">
-                    {emptyIcon || <Search size={32} className="text-gray-300" />}
-                    <p>{emptyText}</p>
-                  </div>
-                </td>
+                  </th>
+                ))}
               </tr>
-            ) : (
-              sorted.map((row, idx) => {
-                const key = rowKey ? String(row[rowKey]) : String(idx);
-                const isExpanded = expandedRow === key;
-                return (
-                  <React.Fragment key={key}>
-                    <tr
-                      className={cn(onRowClick && 'cursor-pointer', isExpanded && 'bg-blue-50/50')}
-                      onClick={() => {
-                        if (onRowClick) {
-                          onRowClick(row);
-                        } else {
-                          setExpandedRow(isExpanded ? null : key);
-                        }
-                      }}
-                    >
-                      {columns.map(col => (
-                        <td key={String(col.key)} title={String(row[col.key] ?? '')}>
-                          {col.render
-                            ? col.render(row[col.key], row, idx)
-                            : String(row[col.key] ?? '—')}
-                        </td>
-                      ))}
-                    </tr>
-                    {isExpanded && (
-                      <tr className="bg-blue-50/30 border-b border-gray-100">
-                        <td colSpan={columns.length} className="px-3 py-4">
-                          <div className="grid grid-cols-2 gap-x-8 gap-y-2 text-sm">
-                            {columns.map(col => (
-                              <div key={String(col.key)} className="contents">
-                                <span className="text-xs font-semibold text-gray-500 uppercase">{col.label}</span>
-                                <span className="text-gray-800 break-word">
-                                  {col.render
-                                    ? col.render(row[col.key], row, idx)
-                                    : String(row[col.key] ?? '—')}
-                                </span>
-                              </div>
-                            ))}
-                          </div>
-                        </td>
+            </thead>
+            <tbody>
+              {loading ? (
+                Array.from({ length: 5 }).map((_, i) => (
+                  <tr key={i}>
+                    {columns.map(col => (
+                      <td key={String(col.key)}>
+                        <div className="skeleton h-5 w-full rounded" />
+                      </td>
+                    ))}
+                  </tr>
+                ))
+              ) : sorted.length === 0 ? (
+                <tr>
+                  <td colSpan={columns.length} className="text-center py-12 text-gray-400">
+                    <div className="flex flex-col items-center gap-2">
+                      {emptyIcon || <Search size={32} className="text-gray-300" />}
+                      <p>{emptyText}</p>
+                    </div>
+                  </td>
+                </tr>
+              ) : (
+                sorted.map((row, idx) => {
+                  const key = rowKey ? String(row[rowKey]) : String(idx);
+                  const isExpanded = expandedRow === key;
+                  return (
+                    <React.Fragment key={key}>
+                      <tr
+                        className={cn(onRowClick && 'cursor-pointer', isExpanded && 'bg-blue-50/50')}
+                        onClick={() => {
+                          if (onRowClick) {
+                            onRowClick(row);
+                          } else {
+                            setExpandedRow(isExpanded ? null : key);
+                          }
+                        }}
+                      >
+                        {columns.map(col => (
+                          <td key={String(col.key)} title={String(row[col.key] ?? '')}>
+                            {col.render
+                              ? col.render(row[col.key], row, idx)
+                              : String(row[col.key] ?? '—')}
+                          </td>
+                        ))}
                       </tr>
-                    )}
-                  </React.Fragment>
-                );
-              })
-            )}
-          </tbody>
-        </table>
+                      {isExpanded && (
+                        <tr className="bg-blue-50/30 border-b border-gray-100">
+                          <td colSpan={columns.length} className="px-3 py-4">
+                            <div className="grid grid-cols-2 gap-x-8 gap-y-2 text-sm">
+                              {columns.map(col => (
+                                <div key={String(col.key)} className="contents">
+                                  <span className="text-xs font-semibold text-gray-500 uppercase">{col.label}</span>
+                                  <span className="text-gray-800 break-word">
+                                    {col.render
+                                      ? col.render(row[col.key], row, idx)
+                                      : String(row[col.key] ?? '—')}
+                                  </span>
+                                </div>
+                              ))}
+                            </div>
+                          </td>
+                        </tr>
+                      )}
+                    </React.Fragment>
+                  );
+                })
+              )}
+            </tbody>
+          </table>
+        </div>
       </div>
 
-      {/* Pagination */}
+      {/* Pagination — luôn thấy bên dưới */}
       {showPagination && !loading && sorted.length > 0 && (
-        <div className="flex items-center justify-between flex-wrap gap-2 px-1">
+        <div className="flex items-center justify-between flex-wrap gap-2 px-1 flex-shrink-0">
           <p className="text-xs text-gray-500">
             {total
               ? `Hiển thị ${startRow}–${endRow} của ${total} bản ghi`

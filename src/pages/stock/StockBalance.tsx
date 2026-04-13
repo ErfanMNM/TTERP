@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { Download, BarChart3, RefreshCw } from 'lucide-react';
 import PageHeader from '../../components/PageHeader';
 import DataTable from '../../components/DataTable';
@@ -26,6 +27,8 @@ export default function StockBalance() {
   const [pageSize, setPageSize] = useState(20);
   const [search, setSearch] = useState('');
   const [refreshing, setRefreshing] = useState(false);
+
+  const navigate = useNavigate();
 
   const fetchData = (pageNum = 1) => {
     setLoading(true);
@@ -76,7 +79,14 @@ export default function StockBalance() {
       label: 'Mã vật tư',
       sortable: true,
       width: '160px',
-      render: (val: unknown) => <span className="font-medium text-blue-600 block truncate">{String(val)}</span>,
+      render: (val: unknown) => (
+        <span
+          className="font-medium text-blue-600 block truncate cursor-pointer hover:underline"
+          onClick={(e) => { e.stopPropagation(); navigate(`/stock/items/${val}`); }}
+        >
+          {String(val)}
+        </span>
+      ),
     },
     {
       key: 'item_name',
@@ -205,6 +215,7 @@ export default function StockBalance() {
           onSearchChange={(val) => { setSearch(val); setPage(1); }}
           showSearch={true}
           showPagination={true}
+          stickyHeader={true}
           emptyText="Không có dữ liệu tồn kho"
           emptyIcon={<BarChart3 size={32} className="text-gray-300" />}
         />

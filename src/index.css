@@ -160,6 +160,20 @@
     @apply w-full px-1 py-1.5 text-xs bg-white/10 border border-white/20 rounded-lg text-white placeholder-white/40 focus:outline-none focus:ring-1 focus:ring-white/30 focus:border-white/40 mt-1;
   }
 
+  /* Sticky table mode */
+  .sticky-table {
+    min-width: 600px;
+  }
+  .sticky-table thead th {
+    position: sticky;
+    top: 0;
+    z-index: 5;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.15);
+  }
+  .sticky-table tbody tr:last-child {
+    border-bottom: none;
+  }
+
   /* FAB */
   .fab {
     @apply fixed bottom-6 right-6 w-14 h-14 rounded-full bg-blue-600 text-white shadow-lg hover:bg-blue-700 hover:shadow-xl active:scale-90 transition-all duration-200 flex items-center justify-center z-40;
