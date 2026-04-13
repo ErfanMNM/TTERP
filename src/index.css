@@ -80,8 +80,11 @@
   .card-press {
     @apply bg-white rounded-2xl shadow-sm hover:shadow-md transition-all duration-200 active:scale-95 cursor-pointer;
   }
+  .card-header {
+    @apply px-5 pt-4 pb-2 border-b border-gray-100;
+  }
   .card-body {
-    @apply p-4 lg:p-5;
+    @apply p-5;
   }
 
   /* Chips / Badges */

@@ -744,6 +744,28 @@ export const itemPriceApi = {
     createResource('Item Price', data),
 };
 
+export const commentApi = {
+  list: (params?: Record<string, unknown>) =>
+    listResource<{
+      name: string; comment_type: string; content: string;
+      owner: string; creation: string;
+    }>('Comment', params),
+  create: (data: { comment_type: string; content: string; reference_doctype: string; reference_name: string }) =>
+    createResource('Comment', data),
+  update: (name: string, data: { content: string }) =>
+    updateResource('Comment', name, data),
+  delete: (name: string) =>
+    api.delete(`/resource/Comment/${name}`),
+};
+
+export const versionApi = {
+  list: (params?: Record<string, unknown>) =>
+    listResource<{
+      name: string; owner: string; modified: string;
+      ref_doctype: string; docname: string; data: string;
+    }>('Version', params),
+};
+
 // ─── Session check ─────────────────────────────────────────────────────────────
 export async function checkSession(): Promise<string | null> {
   try {
