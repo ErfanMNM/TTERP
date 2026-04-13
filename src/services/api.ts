@@ -38,6 +38,21 @@ async function reportview<T>(method: string, params: Record<string, unknown>): P
   return res.json();
 }
 
+// Generic getCount — works for any doctype
+export async function getCount(
+  doctype: string,
+  filters?: unknown[],
+): Promise<number> {
+  const res = await reportview<{ message: number }>('frappe.desk.reportview.get_count', {
+    doctype,
+    filters: JSON.stringify(filters ?? []),
+    fields: JSON.stringify([]),
+    distinct: false,
+    limit: 1001,
+  });
+  return res.message ?? 0;
+}
+
 // ─── Auth ────────────────────────────────────────────────────────────────────
 export const authApi = {
   login: (usr: string, pwd: string) =>
@@ -478,10 +493,11 @@ export const stockReconciliationApi = {
 
 // ─── Stock Balance ────────────────────────────────────────────────────────────
 export const stockBalanceApi = {
-  list: async (params?: { warehouse?: string; item_code?: string; limit?: number; start?: number }) => {
+  list: async (params?: { warehouse?: string; item_code?: string; limit?: number; start?: number; search?: string }) => {
     const filters: string[] = [];
     if (params?.warehouse) filters.push(['Bin', 'warehouse', '=', params.warehouse]);
     if (params?.item_code) filters.push(['Bin', 'item_code', '=', params.item_code]);
+    if (params?.search) filters.push(['Bin', 'item_code', 'like', '%' + params.search + '%']);
 
     const res = await api.get<{ data: Array<{
       item_code: string; warehouse: string;

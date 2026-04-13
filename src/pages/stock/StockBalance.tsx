@@ -3,8 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { Download, BarChart3, RefreshCw } from 'lucide-react';
 import PageHeader from '../../components/PageHeader';
 import DataTable from '../../components/DataTable';
-import PageLoader from '../../components/PageLoader';
-import { stockBalanceApi } from '../../services/api';
+import { stockBalanceApi, getCount } from '../../services/api';
 import { formatNumber, formatCurrency, cn } from '../../lib/utils';
 
 interface BalanceRow {
@@ -25,29 +24,54 @@ export default function StockBalance() {
   const [loading, setLoading] = useState(true);
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(20);
+  const [total, setTotal] = useState(0);
   const [search, setSearch] = useState('');
   const [refreshing, setRefreshing] = useState(false);
 
   const navigate = useNavigate();
 
-  const fetchData = (pageNum = 1) => {
-    setLoading(true);
-    stockBalanceApi.list({ limit: pageSize * 10, start: (pageNum - 1) * pageSize })
-      .then(res => {
-        const raw: BalanceRow[] = Array.isArray(res.message) ? res.message : [];
-        setData(raw);
-      })
-      .catch(() => setData([]))
-      .finally(() => setLoading(false));
-  };
-
   useEffect(() => {
-    fetchData(page);
+    let cancelled = false;
+    setLoading(true);
+
+    const fetchData = async () => {
+      try {
+        const filters: string[] = [];
+        if (search) {
+          filters.push(['Bin', 'item_code', 'like', '%' + search + '%']);
+        }
+
+        const [countRes, listRes] = await Promise.all([
+          getCount('Bin', filters),
+          stockBalanceApi.list({
+            limit: pageSize,
+            start: (page - 1) * pageSize,
+            search,
+          }),
+        ]);
+
+        if (cancelled) return;
+
+        const raw: BalanceRow[] = Array.isArray(listRes.message) ? listRes.message : [];
+        setTotal(countRes);
+        setData(raw);
+      } catch {
+        if (!cancelled) {
+          setData([]);
+          setTotal(0);
+        }
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    };
+
+    fetchData();
+    return () => { cancelled = true; };
   }, [page, pageSize, search]);
 
   const handleRefresh = () => {
     setRefreshing(true);
-    fetchData(page);
+    setPage(1);
     setTimeout(() => setRefreshing(false), 500);
   };
 
@@ -176,7 +200,7 @@ export default function StockBalance() {
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-4">
           <div className="card card-body py-3">
             <p className="text-xs text-gray-400 uppercase tracking-wide">Tổng vật tư</p>
-            <p className="text-xl font-bold text-gray-800">{formatNumber(data.length)}</p>
+            <p className="text-xl font-bold text-gray-800">{formatNumber(total)}</p>
           </div>
           <div className="card card-body py-3">
             <p className="text-xs text-gray-400 uppercase tracking-wide">Tồn thực</p>
@@ -203,10 +227,11 @@ export default function StockBalance() {
         <DataTable
           columns={columns}
           data={data}
-          loading={false}
+          loading={loading}
           rowKey="item_code"
           page={page}
           pageSize={pageSize}
+          total={total}
           onPageChange={setPage}
           onPageSizeChange={(size) => { setPageSize(size); setPage(1); }}
           searchValue={search}
