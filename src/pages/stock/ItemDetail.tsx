@@ -1,6 +1,6 @@
 import React, { useEffect, useState, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { Package, Warehouse, Activity, Send, Pencil, Trash2, X, Check } from 'lucide-react';
+import { Package, Warehouse, Activity, Send, Pencil, Trash2, X, Check, ExternalLink } from 'lucide-react';
 import PageHeader from '../../components/PageHeader';
 import StatusBadge from '../../components/StatusBadge';
 import PageLoader from '../../components/PageLoader';
@@ -47,6 +47,7 @@ interface VersionRow {
 }
 
 export default function ItemDetail() {
+  const ERP_HOST = 'https://erp.mte.vn';
   const { name } = useParams<{ name: string }>();
   const navigate = useNavigate();
   const [data, setData] = useState<ItemData | null>(null);
@@ -277,16 +278,16 @@ export default function ItemDetail() {
     return (
       <div className="max-w-6xl mx-auto page-enter">
         <PageHeader title="Chi tiết vật tư" backTo="/stock/items" />
-        <div className="card card-body text-center py-12 text-gray-400">
-          <Package size={48} className="mx-auto mb-3 text-gray-300" />
-          <p>Không tìm thấy vật tư</p>
-          <button onClick={() => navigate('/stock/items')} className="btn btn-secondary mt-4">
-            Quay lại
-          </button>
-        </div>
+      <div className="card card-body text-center py-12 text-gray-400">
+        <Package size={48} className="mx-auto mb-3 text-gray-300" />
+        <p>Không tìm thấy vật tư</p>
+        <button onClick={() => navigate('/stock/items')} className="btn btn-secondary mt-4">
+          Quay lại
+        </button>
       </div>
-    );
-  }
+    </div>
+  );
+}
 
   return (
     <div className="max-w-6xl mx-auto page-enter">
@@ -295,6 +296,18 @@ export default function ItemDetail() {
         subtitle={`Mã: ${data.name}`}
         backTo="/stock/items"
         badge={<StatusBadge status={data.disabled === 1 ? 'Inactive' : 'Active'} />}
+        actions={
+          <a
+            href={`${ERP_HOST}/app/item/${encodeURIComponent(data.name)}`}
+            target="_blank"
+            rel="noopener noreferrer"
+            title="Mở trên ERPNext"
+            className="btn btn-secondary flex items-center gap-1.5"
+          >
+            <ExternalLink size={16} />
+            <span className="hidden sm:inline">ERP</span>
+          </a>
+        }
       />
 
       {/* Info cards grid */}
@@ -477,7 +490,7 @@ export default function ItemDetail() {
                       {/* Attachment preview */}
                       {item.type === 'attachment' && item.attachment && (
                         <a
-                          href={item.attachment}
+                          href={`${ERP_HOST}${item.attachment}`}
                           target="_blank"
                           rel="noopener noreferrer"
                           className="mt-1.5 inline-flex items-center gap-2 px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg text-sm text-blue-600 hover:bg-gray-100 transition-colors"

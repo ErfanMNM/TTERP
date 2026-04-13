@@ -17,6 +17,7 @@ interface ItemRow {
 }
 
 export default function Items() {
+  const ERP_HOST = 'https://erp.mte.vn';
   const navigate = useNavigate();
   const [data, setData] = useState<ItemRow[]>([]);
   const [loading, setLoading] = useState(true);
@@ -80,7 +81,7 @@ export default function Items() {
       width: '48px',
       render: (val: unknown) =>
         val ? (
-          <img src={val as string} alt="" className="w-8 h-8 object-cover rounded border" />
+          <img src={`${ERP_HOST}${val}` as string} alt="" className="w-8 h-8 object-cover rounded border" />
         ) : (
           <div className="w-8 h-8 rounded border border-gray-200 bg-gray-50 flex items-center justify-center">
             <Package size={14} className="text-gray-300" />
