@@ -49,7 +49,7 @@ export default function Items() {
         if (cancelled) return;
 
         const totalCount = countRes?.message ?? 0;
-        const raw = listRes?.message as { keys?: string[]; values?: unknown[][] } | undefined;
+        const raw = listRes?.message as unknown as { keys?: string[]; values?: unknown[][] } | undefined;
         let items: ItemRow[] = [];
         if (raw?.keys && raw?.values) {
           items = raw.values.map((row: unknown[]) => {

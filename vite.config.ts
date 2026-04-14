@@ -24,11 +24,9 @@ export default defineConfig({
         changeOrigin: true,
         secure: false,
         configure: (proxy) => {
-          proxy.on('proxyReq', (proxyReq, req) => {
-            // Strip both 'expect' and 'Expect' — needed for ERPNext POST /api/method/
+          proxy.on('proxyReq', (proxyReq) => {
+            // Strip expect header for ERPNext POST /api/method/ to avoid 417
             proxyReq.removeHeader('expect');
-            // Also remove via setHeader empty to be extra safe
-            try { proxyReq.setHeader('expect', ''); } catch { /* already removed */ }
           });
         },
       },

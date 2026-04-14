@@ -59,6 +59,7 @@ export interface DocInfo {
   attachment_logs: Array<Record<string, unknown>>;
   versions: Array<{ name: string; owner: string; creation: string; data: string }>;
   assignments: Array<{ name: string; owner: string; description: string }>;
+  [key: string]: unknown;
 }
 
 export interface GetDocResult<T = Record<string, unknown>> {
@@ -84,8 +85,10 @@ export async function getDoc<T = Record<string, unknown>>(doctype: string, name:
 
   const data = await res.json();
   if (data?.exception) throw new Error(data.message || data.exception);
-  return data;
+  return data as GetDocResult<T>;
 }
+
+// ─── Reportview ────────────────────────────────────────────────────────────────
 
 // Generic getCount — works for any doctype
 export async function getCount(
@@ -543,7 +546,7 @@ export const stockReconciliationApi = {
 // ─── Stock Balance ────────────────────────────────────────────────────────────
 export const stockBalanceApi = {
   list: async (params?: { warehouse?: string; item_code?: string; limit?: number; start?: number; search?: string }) => {
-    const filters: string[] = [];
+    const filters: unknown[] = [];
     if (params?.warehouse) filters.push(['Bin', 'warehouse', '=', params.warehouse]);
     if (params?.item_code) filters.push(['Bin', 'item_code', '=', params.item_code]);
     if (params?.search) filters.push(['Bin', 'item_code', 'like', '%' + params.search + '%']);

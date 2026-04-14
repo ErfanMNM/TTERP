@@ -36,7 +36,7 @@ export default function StockBalance() {
 
     const fetchData = async () => {
       try {
-        const filters: string[] = [];
+        const filters: unknown[] = [];
         if (search) {
           filters.push(['Bin', 'item_code', 'like', '%' + search + '%']);
         }

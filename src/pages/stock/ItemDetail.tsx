@@ -2,9 +2,10 @@ import React, { useEffect, useState, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import {
   Package, Warehouse, Activity, Send, ExternalLink,
-  FileText, Share2, Paperclip, UserCheck, Plus, Trash2, AlertCircle,
+  FileText, Share2, Paperclip, UserCheck, Plus, Trash2, AlertCircle, Pencil, Check, X, RefreshCw,
 } from 'lucide-react';
 import PageHeader from '../../components/PageHeader';
+import RichEditor, { RichEditorHandle } from '../../components/RichEditor';
 import StatusBadge from '../../components/StatusBadge';
 import PageLoader from '../../components/PageLoader';
 import { getDoc, stockBalanceApi, commentApi, reportview, searchLink } from '../../services/api';
@@ -50,6 +51,12 @@ export default function ItemDetail() {
   const [showSuggestions, setShowSuggestions] = useState(false);
   const [assignToFocused, setAssignToFocused] = useState(false);
   const assignInputRef = useRef<HTMLInputElement>(null);
+  const descEditorRef = useRef<RichEditorHandle>(null);
+
+  // Description edit state
+  const [editingDesc, setEditingDesc] = useState(false);
+  const [descText, setDescText] = useState('');
+  const [savingDesc, setSavingDesc] = useState(false);
 
   // ─── Initial load: getDoc gives us everything ─────────────────────────────────
   useEffect(() => {
@@ -61,7 +68,7 @@ export default function ItemDetail() {
     getDoc<Record<string, unknown>>('Item', name)
       .then(res => {
         setData(res.docs[0] || null);
-        setDocinfo(res.docinfo as Record<string, unknown>);
+        setDocinfo(res.docinfo as unknown as Record<string, unknown>);
       })
       .catch(() => setData(null))
       .finally(() => setLoading(false));
@@ -117,7 +124,7 @@ export default function ItemDetail() {
   const refreshComments = async () => {
     if (!name) return;
     const res = await getDoc<Record<string, unknown>>('Item', name);
-    setDocinfo(res.docinfo as Record<string, unknown>);
+    setDocinfo(res.docinfo as unknown as Record<string, unknown>);
   };
 
   const handleAddComment = async () => {
@@ -139,10 +146,51 @@ export default function ItemDetail() {
     try { await commentApi.delete(id); await refreshComments(); } catch { /* silent */ }
   };
 
+  // Save item description via savedocs
+  const handleSaveDesc = async () => {
+    if (!data) return;
+    setSavingDesc(true);
+    try {
+      const doc = {
+        ...data,
+        description: descText,
+        __unsaved: 1,
+      };
+      const body = new URLSearchParams({ doc: JSON.stringify(doc), action: 'Save' });
+      const res = await fetch(`/api/method/frappe.desk.form.save.savedocs`, {
+        method: 'POST',
+        credentials: 'include',
+        headers: {
+          'Content-Type': 'application/x-www-form-urlencoded',
+          'Accept': 'application/json',
+          'X-Requested-With': 'XMLHttpRequest',
+        },
+        body,
+      });
+      const json = await res.json();
+      if (!json.exception && json.docs?.[0]) {
+        setData(json.docs[0]);
+        if (json.docinfo) setDocinfo(json.docinfo as unknown as Record<string, unknown>);
+      }
+      setEditingDesc(false);
+    } catch { /* silent */ } finally { setSavingDesc(false); }
+  };
+
   const handleAssign = async () => {
-    if (!assignTo.trim() || !name) return;
+    if (!assignTo.trim() || !itemCode) return;
     setAssignLoading(true);
     try {
+      const body = new URLSearchParams({
+        assign_to_me: '0',
+        assign_to: JSON.stringify([assignTo.trim()]),
+        date: assignDate,
+        priority: assignPriority,
+        description: assignDesc.trim() || '<div class="ql-editor read-mode"><p></p></div>',
+        doctype: 'Item',
+        name: itemCode,
+        bulk_assign: 'false',
+        re_assign: 'false',
+      });
       await fetch(`/api/method/frappe.desk.form.assign_to.add`, {
         method: 'POST',
         credentials: 'include',
@@ -150,24 +198,16 @@ export default function ItemDetail() {
           'Content-Type': 'application/x-www-form-urlencoded',
           'Accept': 'application/json',
           'X-Requested-With': 'XMLHttpRequest',
-          'X-Frappe-Doctype': 'Item',
         },
-        body: new URLSearchParams({
-          assign_to: assignTo.trim(),
-          description: assignDesc.trim(),
-          priority: assignPriority,
-          date: assignDate,
-          reference_doctype: 'Item',
-          reference_name: name,
-        }),
+        body,
       });
       setAssignTo('');
       setAssignDesc('');
       setAssignPriority('Medium');
       setAssignDate('');
-      const res = await getDoc<ItemData>(name);
+      const res = await getDoc<Record<string, unknown>>('Item', itemCode);
       setData(res.docs[0]);
-      setDocInfo(res.docinfo);
+      setDocinfo(res.docinfo as unknown as Record<string, unknown>);
     } catch { /* silent */ } finally { setAssignLoading(false); }
   };
 
@@ -185,9 +225,9 @@ export default function ItemDetail() {
         },
         body: new URLSearchParams({ doctype: 'Item', name: itemCode, assign_to: assignToUser }),
       });
-      const res = await getDoc<ItemData>(itemCode);
+      const res = await getDoc<Record<string, unknown>>('Item', itemCode);
       setData(res.docs[0]);
-      setDocInfo(res.docinfo);
+      setDocinfo(res.docinfo as unknown as Record<string, unknown>);
     } catch { /* silent */ }
   };
 
@@ -402,14 +442,60 @@ export default function ItemDetail() {
             </div>
           </div>
 
-          {d('description') && (
-            <div className="card mt-4">
-              <div className="card-header"><h2 className="text-base font-semibold text-gray-800">Mô tả</h2></div>
-              <div className="card-body">
-                <p className="text-sm text-gray-600 whitespace-pre-wrap">{String(d('description'))}</p>
-              </div>
+          {/* Description */}
+          <div className="card mt-4">
+            <div className="card-header flex items-center justify-between">
+              <h2 className="text-base font-semibold text-gray-800">Mô tả</h2>
+              {!editingDesc && (
+                <button
+                  onClick={() => {
+                    const raw = String(data?.description || '');
+                    // Strip ERPNext wrapper: <div class="ql-editor ...">...</div> → just inner HTML
+                    const inner = raw.replace(/<div class="ql-editor[^"]*">/, '').replace(/<\/div>$/, '').trim();
+                    setDescText(inner);
+                    setEditingDesc(true);
+                  }}
+                  className="btn btn-secondary px-2.5 py-1 text-xs flex items-center gap-1"
+                >
+                  <Pencil size={12} />
+                  Sửa
+                </button>
+              )}
             </div>
-          )}
+            <div className="card-body">
+              {editingDesc ? (
+                <div className="space-y-3">
+                  <RichEditor
+                    ref={descEditorRef}
+                    value={descText ? `<p>${descText}</p>` : ''}
+                    onChange={html => setDescText(html)}
+                    autoFocus
+                  />
+                  <div className="flex gap-2">
+                    <button
+                      onClick={handleSaveDesc}
+                      disabled={savingDesc}
+                      className="btn btn-primary px-3 py-1.5 text-sm flex items-center gap-1.5 disabled:opacity-50"
+                    >
+                      {savingDesc ? <span className="animate-spin"><RefreshCw size={13} /></span> : <Check size={13} />}
+                      {savingDesc ? 'Đang lưu...' : 'Lưu'}
+                    </button>
+                    <button
+                      onClick={() => { setEditingDesc(false); setDescText(''); }}
+                      className="btn btn-secondary px-3 py-1.5 text-sm flex items-center gap-1.5"
+                    >
+                      <X size={13} />
+                      Hủy
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <p className="text-sm text-gray-600 whitespace-pre-wrap">
+                  {data?.description ? stripHtml(String(data.description)) : <span className="text-gray-400 italic">Chưa có mô tả</span>}
+                </p>
+              )}
+            </div>
+          </div>
         </>
       )}
 
