@@ -259,31 +259,53 @@ export default function ItemDetail() {
   const fileAttachments: Array<{ name: string; file_name: string; file_url: string }> =
     (docinfo?.attachments as any) ?? [];
 
+  const userInfo: Record<string, { fullname: string }> = (docinfo?.user_info as any) ?? {};
+  const fullnameOf = (owner: string) => userInfo[owner]?.fullname || owner;
+
   const allActivities = [
     ...assignmentLogs.map(l => {
       const isAssigned = l.comment_type === 'Assigned';
+      let assignee = '';
+      let desc = '';
+      if (isAssigned) {
+        // content = "Quản Trị Viên Cấp Cao assigned Huy Trần: <div class="ql-editor..."><p>description</p></div>"
+        const match = l.content.match(/ assigned ([^:]+):\s*/);
+        if (match) assignee = match[1].trim();
+        const afterColon = l.content.substring(l.content.indexOf(':') + 1);
+        desc = stripHtml(afterColon);
+      }
+      const label = isAssigned && assignee
+        ? `${fullnameOf(l.owner)} giao việc cho ${assignee}`
+        : stripHtml(l.content);
       return {
         type: 'assignment' as const,
-        label: isAssigned ? stripHtml(l.content).replace(/ assigned .+?: /, ' giao việc') : stripHtml(l.content),
+        label,
         sub: formatDate(l.creation),
         owner: l.owner,
         time: l.creation,
         attachment: null,
-        content: isAssigned ? stripHtml(l.content) : '',
+        content: desc,
       };
     }),
-    ...attachmentLogs.map(a => ({
-      type: 'attachment' as const,
-      label: 'đính kèm tệp',
-      sub: formatDate(a.creation),
-      owner: a.owner,
-      time: a.creation,
-      attachment: a.content.match(/href="([^"]+)"/)?.[1] || null,
-      content: '',
-    })),
+    ...attachmentLogs.map(a => {
+      // content = '<a href="/files/logo.png" ...>logo.png</a>'
+      const hrefMatch = a.content.match(/href="([^"]+)"/);
+      const fileMatch = a.content.match(/>([^<]+)<\/a>/);
+      const href = hrefMatch ? hrefMatch[1] : null;
+      const fileName = fileMatch ? fileMatch[1] : (href ? decodeURIComponent(href.split('/').pop() || '') : 'Tệp');
+      return {
+        type: 'attachment' as const,
+        label: `${fullnameOf(a.owner)} đính kèm ${fileName}`,
+        sub: formatDate(a.creation),
+        owner: a.owner,
+        time: a.creation,
+        attachment: href,
+        content: '',
+      };
+    }),
     ...comments.map(c => ({
       type: 'comment' as const,
-      label: c.owner,
+      label: fullnameOf(c.owner),
       sub: formatDate(c.creation),
       owner: c.owner,
       time: c.creation,
@@ -291,14 +313,23 @@ export default function ItemDetail() {
       content: stripHtml(c.content),
     })),
     ...versions.map(v => {
-      let label = `${v.owner} cập nhật`;
+      let label = `${fullnameOf(v.owner)} cập nhật`;
+      let content = '';
       try {
         const d = JSON.parse(v.data);
-        if (d.changed) label = `${d.changed_by} thay đổi "${d.changed[0]}"`;
-        else if (d.created) label = `${d.created_by} tạo document`;
-        else if (d.updater_reference?.label) label = d.updater_reference.label;
+        if (d.changed) {
+          // d.changed[0] = [field, old_value, new_value]
+          const field = d.changed[0][0] as string;
+          const oldVal = stripHtml(String(d.changed[0][1] ?? ''));
+          const newVal = stripHtml(String(d.changed[0][2] ?? ''));
+          label = `${fullnameOf(v.owner)} thay đổi "${field}"`;
+          content = oldVal || newVal ? `Giá trị cũ: ${oldVal || '(trống)'}\nGiá trị mới: ${newVal || '(trống)'}` : '';
+        } else if (d.created_by) {
+          label = `${fullnameOf(d.created_by)} tạo document`;
+          if (d.updater_reference?.label) content = d.updater_reference.label;
+        }
       } catch { /* ignore */ }
-      return { type: 'version' as const, label, sub: formatDate(v.creation), owner: v.owner, time: v.creation, attachment: null, content: '' };
+      return { type: 'version' as const, label, sub: formatDate(v.creation), owner: v.owner, time: v.creation, attachment: null, content };
     }),
   ].sort((a, b) => new Date(b.time || 0).getTime() - new Date(a.time || 0).getTime());
 
