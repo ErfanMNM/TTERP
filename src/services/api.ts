@@ -535,6 +535,7 @@ export const stockEntryApi = {
         '`tabStock Entry`.`docstatus`',
         '`tabStock Entry`.`creation`',
         '`tabStock Entry`.`modified`',
+        '`tabStock Entry`.`posting_date`',
       ]),
       filters: JSON.stringify(params?.filters ?? []),
       order_by: '`tabStock Entry`.`creation` desc',

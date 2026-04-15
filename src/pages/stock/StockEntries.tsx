@@ -13,9 +13,10 @@ interface StockEntryRow {
   stock_entry_type: string;
   purpose: string;
   posting_date: string;
+  from_warehouse: string;
+  to_warehouse: string;
   docstatus: number;
-  status: string;
-  company: string;
+  creation: string;
 }
 
 export default function StockEntries() {
@@ -23,25 +24,25 @@ export default function StockEntries() {
   const [data, setData] = useState<StockEntryRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [page, setPage] = useState(1);
-  const [pageSize, setPageSize] = useState(20);
+  const [pageSize] = useState(20);
   const [total, setTotal] = useState(0);
   const [search, setSearch] = useState('');
 
-  const fetchData = (pageNum = 1) => {
+  const fetchData = (pageNum: number) => {
     setLoading(true);
-    const params: Record<string, unknown> = {
-      fields: JSON.stringify(['name', 'stock_entry_type', 'purpose', 'posting_date', 'docstatus', 'status', 'company']),
-      limit_page_length: pageSize,
-      limit_start: (pageNum - 1) * pageSize,
-      order_by: 'modified desc',
-    };
+    const filters: unknown[] = [];
     if (search) {
-      params.filters = JSON.stringify([['Stock Entry', 'name', 'like', '%' + search + '%']]);
+      filters.push(['Stock Entry', 'name', 'like', '%' + search + '%']);
     }
-    stockEntryApi.list(params)
-      .then(res => {
-        setData(res.data?.data || []);
-        setTotal(res.data?.count || 0);
+    // Gọi song song: lấy tổng số + lấy danh sách theo trang
+    // ERPNext reportview dùng start (0-based), page 1 = start 0
+    Promise.all([
+      stockEntryApi.getCount({ filters }),
+      stockEntryApi.getList({ filters, start: (pageNum - 1) * pageSize, pageLength: pageSize }),
+    ])
+      .then(([countRes, listRes]) => {
+        setTotal(countRes.message);
+        setData(listRes as unknown as StockEntryRow[]);
       })
       .catch(() => setData([]))
       .finally(() => setLoading(false));
@@ -49,18 +50,24 @@ export default function StockEntries() {
 
   useEffect(() => {
     fetchData(page);
-  }, [page, pageSize, search]);
+  }, [page, search]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const columns = [
     { key: 'name', label: 'Số phiếu', sortable: true, minWidth: '140px' },
     { key: 'stock_entry_type', label: 'Loại', sortable: true, minWidth: '160px' },
     { key: 'purpose', label: 'Mục đích', sortable: true, minWidth: '140px' },
     {
-      key: 'posting_date',
-      label: 'Ngày',
+      key: 'to_warehouse',
+      label: 'Kho',
+      minWidth: '180px',
+      render: (val: unknown) => <span className="text-sm">{val ? String(val) : '—'}</span>,
+    },
+    {
+      key: 'creation',
+      label: 'Ngày tạo',
       sortable: true,
-      width: '110px',
-      render: (val: unknown) => formatDate(String(val)),
+      width: '140px',
+      render: (val: unknown) => formatDate(String(val).split(' ')[0]),
     },
     {
       key: 'docstatus',
@@ -68,7 +75,6 @@ export default function StockEntries() {
       width: '110px',
       render: (val: unknown) => <StatusBadge status={String(val)} />,
     },
-    { key: 'status', label: 'Tình trạng', width: '120px', render: (val: unknown) => <StatusBadge status={String(val)} /> },
   ];
 
   return (
