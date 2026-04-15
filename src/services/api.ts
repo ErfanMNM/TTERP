@@ -501,6 +501,54 @@ export const stockEntryApi = {
     updateResource('Stock Entry', name, data),
   submit: (name: string) =>
     submitDoc('Stock Entry', name),
+
+  // Lấy tổng số Stock Entry — dùng frappe.desk.reportview.get_count
+  getCount: (params?: { filters?: unknown[] }) =>
+    reportview<{ message: number }>('frappe.desk.reportview.get_count', {
+      doctype: 'Stock Entry',
+      filters: JSON.stringify(params?.filters ?? []),
+      fields: JSON.stringify([]),
+      distinct: false,
+      limit: 1001,
+    }),
+
+  // Lấy danh sách Stock Entry — dùng frappe.desk.reportview.get (đúng chuẩn ERPNext)
+  // Response ERPNext: { message: { keys: string[], values: any[][] } }
+  // → transform thành array of objects
+  getList: async (params?: {
+    pageLength?: number;
+    start?: number;
+    filters?: unknown[];
+  }): Promise<Array<Record<string, unknown>>> => {
+    const raw = await reportview<{
+      message: { keys: string[]; values: unknown[][] };
+    }>('frappe.desk.reportview.get', {
+      doctype: 'Stock Entry',
+      fields: JSON.stringify([
+        '`tabStock Entry`.`name`',
+        '`tabStock Entry`.`stock_entry_type`',
+        '`tabStock Entry`.`purpose`',
+        '`tabStock Entry`.`from_warehouse`',
+        '`tabStock Entry`.`to_warehouse`',
+        '`tabStock Entry`.`per_transferred`',
+        '`tabStock Entry`.`is_return`',
+        '`tabStock Entry`.`docstatus`',
+        '`tabStock Entry`.`creation`',
+        '`tabStock Entry`.`modified`',
+      ]),
+      filters: JSON.stringify(params?.filters ?? []),
+      order_by: '`tabStock Entry`.`creation` desc',
+      start: params?.start ?? 0,
+      page_length: params?.pageLength ?? 20,
+      view: 'List',
+      group_by: '',
+      with_comment_count: false,
+    });
+    const { keys, values } = raw.message;
+    return (values ?? []).map(row =>
+      Object.fromEntries(keys.map((k, i) => [k, row[i]]))
+    );
+  },
 };
 
 // ─── Material Request ────────────────────────────────────────────────────────
