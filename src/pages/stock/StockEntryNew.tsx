@@ -2,7 +2,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Plus, Trash2, Save, X, Search } from 'lucide-react';
 import PageHeader from '../../components/PageHeader';
-import { stockEntryApi, warehouseApi, itemApi } from '../../services/api';
+import { stockEntryApi, warehouseApi, itemApi, uomApi } from '../../services/api';
 import { useApp } from '../../contexts/AppContext';
 import { debounce } from '../../lib/utils';
 
@@ -13,32 +13,78 @@ interface Warehouse {
 
 interface Item {
   name: string;
-  item_name: string;
   item_code: string;
+  item_name: string;
+  stock_uom: string;
+  description?: string;
+  item_group?: string;
 }
 
-interface StockEntryRow {
+interface UOM {
+  name: string;
+  uom_name: string;
+}
+
+interface StockEntryItemRow {
   item_code: string;
   item_name: string;
-  s_warehouse: string;
-  t_warehouse: string;
+  description: string;
   qty: number;
+  transfer_qty: number;
+  stock_uom: string;
   basic_rate: number;
   basic_amount: number;
+  s_warehouse: string;
+  t_warehouse: string;
+  uom: string;
+  conversion_factor: number;
+  batch_no: string;
+  serial_no: string;
+  expense_account: string;
+  cost_center: string;
+}
+
+interface StockEntryFormState {
+  stock_entry_type: string;
+  posting_date: string;
+  posting_time: string;
+  company: string;
+  purpose: string;
+  remarks: string;
+  add_to_transit: boolean;
+  apply_staging_folder_rule: boolean;
+  inspection_required: boolean;
+  from_warehouse: string;
+  to_warehouse: string;
+  project: string;
+  expense_account: string;
 }
 
 const STOCK_ENTRY_TYPES = [
-  'Material Receipt',
-  'Material Issue',
-  'Material Transfer',
-  'Manufacture',
+  { value: 'Material Receipt', label: 'Nhập kho (Material Receipt)' },
+  { value: 'Material Issue', label: 'Xuất kho (Material Issue)' },
+  { value: 'Material Transfer', label: 'Chuyển kho (Material Transfer)' },
+  { value: 'Manufacture', label: 'Sản xuất (Manufacture)' },
+  { value: 'Repack', label: 'Đóng gói lại (Repack)' },
+  { value: 'Send to Subcontractor', label: 'Gửi gia công (Send to Subcontractor)' },
 ];
+
+const PURPOSE_MAP: Record<string, string> = {
+  'Material Receipt': 'Material Receipt',
+  'Material Issue': 'Material Issue',
+  'Material Transfer': 'Material Transfer',
+  'Manufacture': 'Manufacture',
+  'Repack': 'Repack',
+  'Send to Subcontractor': 'Material Receipt',
+};
 
 export default function StockEntryNew() {
   const navigate = useNavigate();
   const { companies, selectedCompany } = useApp();
+
   const [loading, setLoading] = useState(false);
   const [warehouses, setWarehouses] = useState<Warehouse[]>([]);
+  const [stockSettings, setStockSettings] = useState<{ default_warehouse?: string; sample_retention_warehouse?: string }>({});
 
   // Item picker modal
   const [pickerOpen, setPickerOpen] = useState(false);
@@ -46,63 +92,119 @@ export default function StockEntryNew() {
   const [pickerSearch, setPickerSearch] = useState('');
   const [pickerItems, setPickerItems] = useState<Item[]>([]);
   const [pickerLoading, setPickerLoading] = useState(false);
+  const [pickerError, setPickerError] = useState('');
 
   const [error, setError] = useState('');
 
-  const [form, setForm] = useState({
+  const [uoms, setUoms] = useState<UOM[]>([]);
+
+  const [form, setForm] = useState<StockEntryFormState>({
     stock_entry_type: 'Material Receipt',
     posting_date: new Date().toISOString().slice(0, 10),
+    posting_time: new Date().toTimeString().slice(0, 5),
     company: selectedCompany || '',
-    purpose: '',
+    purpose: 'Material Receipt',
+    remarks: '',
+    add_to_transit: false,
+    apply_staging_folder_rule: false,
+    inspection_required: false,
+    from_warehouse: '',
+    to_warehouse: '',
+    project: '',
+    expense_account: '',
   });
 
-  const [rows, setRows] = useState<StockEntryRow[]>([
-    { item_code: '', item_name: '', s_warehouse: '', t_warehouse: '', qty: 1, basic_rate: 0, basic_amount: 0 },
+  const [rows, setRows] = useState<StockEntryItemRow[]>([
+    {
+      item_code: '', item_name: '', description: '', qty: 1, transfer_qty: 1,
+      stock_uom: 'Cái', basic_rate: 0, basic_amount: 0,
+      s_warehouse: '', t_warehouse: '', uom: 'Cái',
+      conversion_factor: 1, batch_no: '', serial_no: '',
+      expense_account: '', cost_center: '',
+    },
   ]);
 
+  // ── Load warehouses + UOMs ───────────────────────────────────────────────────
   useEffect(() => {
-    warehouseApi.list({ fields: JSON.stringify(['name', 'warehouse_name']), limit_page_length: 1000 })
-      .then(res => setWarehouses(res.data?.data || []))
-      .catch(() => {});
+    Promise.all([
+      warehouseApi.list({ fields: JSON.stringify(['name', 'warehouse_name']), limit_page_length: 1000 }),
+      uomApi.list({ fields: JSON.stringify(['name', 'uom_name']), limit_page_length: 500 }),
+    ]).then(([whRes, uomRes]) => {
+      setWarehouses(whRes.data?.data || []);
+      setUoms(uomRes.data?.data || []);
+    }).catch(() => {});
   }, []);
 
-  const handleFormChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
-    setForm(prev => ({ ...prev, [e.target.name]: e.target.value }));
+  // ── Auto-set purpose when type changes ──────────────────────────────────────
+  const handleTypeChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
+    const val = e.target.value;
+    setForm(prev => ({ ...prev, stock_entry_type: val, purpose: PURPOSE_MAP[val] || val }));
   };
 
-  const handleRowChange = (idx: number, field: keyof StockEntryRow, value: unknown) => {
+  const handleFormChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
+    const { name, value, type } = e.target;
+    setForm(prev => ({ ...prev, [name]: type === 'checkbox' ? (e.target as HTMLInputElement).checked : value }));
+  };
+
+  const handleRowChange = (idx: number, field: keyof StockEntryItemRow, value: unknown) => {
     setRows(prev => {
       const updated = [...prev];
       updated[idx] = { ...updated[idx], [field]: value };
+
+      // Auto-calculate amount
       if (field === 'qty' || field === 'basic_rate') {
         const qty = field === 'qty' ? Number(value) : updated[idx].qty;
         const rate = field === 'basic_rate' ? Number(value) : updated[idx].basic_rate;
-        updated[idx] = { ...updated[idx], basic_amount: qty * rate };
+        const conv = updated[idx].conversion_factor || 1;
+        updated[idx] = {
+          ...updated[idx],
+          basic_amount: qty * rate,
+          transfer_qty: qty * conv,
+        };
       }
+      if (field === 'conversion_factor') {
+        const conv = Number(value) || 1;
+        updated[idx] = {
+          ...updated[idx],
+          conversion_factor: conv,
+          transfer_qty: updated[idx].qty * conv,
+        };
+      }
+      if (field === 'uom') {
+        updated[idx] = { ...updated[idx], uom: String(value) };
+      }
+
       return updated;
     });
   };
 
   const addRow = () => {
-    setRows(prev => [...prev, { item_code: '', item_name: '', s_warehouse: '', t_warehouse: '', qty: 1, basic_rate: 0, basic_amount: 0 }]);
+    setRows(prev => [...prev, {
+      item_code: '', item_name: '', description: '', qty: 1, transfer_qty: 1,
+      stock_uom: 'Cái', basic_rate: 0, basic_amount: 0,
+      s_warehouse: '', t_warehouse: '', uom: 'Cái',
+      conversion_factor: 1, batch_no: '', serial_no: '',
+      expense_account: '', cost_center: '',
+    }]);
   };
 
   const removeRow = (idx: number) => {
     setRows(prev => prev.filter((_, i) => i !== idx));
   };
 
+  // ── Item picker ──────────────────────────────────────────────────────────────
   const openPicker = (idx: number) => {
     setPickerRowIdx(idx);
     setPickerSearch(rows[idx].item_code || '');
     setPickerItems([]);
+    setPickerError('');
     setPickerOpen(true);
-    // Fetch all items immediately
     setPickerLoading(true);
     itemApi.list({
-      fields: JSON.stringify(['name', 'item_name', 'item_code']),
-      limit_page_length: 50,
+      fields: JSON.stringify(['name', 'item_code', 'item_name', 'stock_uom', 'item_group']),
+      limit_page_length: 30,
     }).then(res => setPickerItems(res.data?.data || []))
-      .catch(() => setPickerItems([]))
+      .catch(() => setPickerError('Không tải được danh sách vật tư.'))
       .finally(() => setPickerLoading(false));
   };
 
@@ -116,9 +218,9 @@ export default function StockEntryNew() {
       setPickerLoading(true);
       try {
         const res = await itemApi.list({
-          fields: JSON.stringify(['name', 'item_name', 'item_code']),
+          fields: JSON.stringify(['name', 'item_code', 'item_name', 'stock_uom', 'item_group']),
           filters: JSON.stringify([['Item', 'item_name', 'like', '%' + query + '%']]),
-          limit_page_length: 50,
+          limit_page_length: 30,
         });
         setPickerItems(res.data?.data || []);
       } catch {
@@ -137,8 +239,19 @@ export default function StockEntryNew() {
 
   const handlePickerSelect = (item: Item) => {
     if (pickerRowIdx === null) return;
-    handleRowChange(pickerRowIdx, 'item_code', item.item_code || item.name);
-    handleRowChange(pickerRowIdx, 'item_name', item.item_name);
+    setRows(prev => {
+      const updated = [...prev];
+      updated[pickerRowIdx] = {
+        ...updated[pickerRowIdx],
+        item_code: item.item_code || item.name,
+        item_name: item.item_name,
+        description: item.description || '',
+        stock_uom: item.stock_uom || 'Cái',
+        uom: item.stock_uom || 'Cái',
+        basic_rate: 0,
+      };
+      return updated;
+    });
     setPickerOpen(false);
     setPickerRowIdx(null);
     setPickerSearch('');
@@ -150,10 +263,13 @@ export default function StockEntryNew() {
     setPickerRowIdx(null);
     setPickerSearch('');
     setPickerItems([]);
+    setPickerError('');
   };
 
+  // ── Submit ───────────────────────────────────────────────────────────────────
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+
     const validRows = rows.filter(r => r.item_code && r.qty > 0);
     if (validRows.length === 0) {
       setError('Vui lòng thêm ít nhất một vật tư.');
@@ -165,35 +281,59 @@ export default function StockEntryNew() {
     }
     setLoading(true);
     setError('');
+
     try {
       const payload = {
         doctype: 'Stock Entry',
         stock_entry_type: form.stock_entry_type,
         posting_date: form.posting_date,
+        posting_time: form.posting_time,
         company: form.company,
         purpose: form.purpose || form.stock_entry_type,
+        remarks: form.remarks,
+        add_to_transit: form.add_to_transit ? 1 : 0,
+        apply_staging_folder_rule: form.apply_staging_folder_rule ? 1 : 0,
+        inspection_required: form.inspection_required ? 1 : 0,
+        from_warehouse: form.from_warehouse || undefined,
+        to_warehouse: form.to_warehouse || undefined,
         items: validRows.map(r => ({
           item_code: r.item_code,
           qty: r.qty,
+          transfer_qty: r.transfer_qty,
+          stock_uom: r.stock_uom,
+          uom: r.uom,
+          conversion_factor: r.conversion_factor,
           basic_rate: r.basic_rate,
           basic_amount: r.basic_amount,
           s_warehouse: r.s_warehouse || undefined,
           t_warehouse: r.t_warehouse || undefined,
+          description: r.description || undefined,
+          batch_no: r.batch_no || undefined,
+          serial_no: r.serial_no || undefined,
+          expense_account: r.expense_account || undefined,
+          cost_center: r.cost_center || undefined,
         })),
       };
-      const res = await stockEntryApi.create(payload) as { data?: { name: string } };
+
+      const res = await stockEntryApi.create(payload) as { data?: { name: string; msg?: string } };
       const name = res.data?.name;
+      if (!name) throw new Error(res.data?.msg || 'Tạo phiếu kho thất bại.');
       navigate(`/stock/stock-entries/${name}`);
     } catch (err: unknown) {
-      const msg = (err as { response?: { data?: { exception?: string } } })?.response?.data?.exception || 'Tạo phiếu kho thất bại.';
+      const msg = (err as { response?: { data?: { exception?: string; message?: string } } })
+        ?.response?.data?.exception
+        || (err as { message?: string })?.message
+        || 'Tạo phiếu kho thất bại.';
       setError(String(msg));
     } finally {
       setLoading(false);
     }
   };
 
+  const isTransfer = form.stock_entry_type === 'Material Transfer';
+
   return (
-    <div className="max-w-6xl mx-auto page-enter">
+    <div className="max-w-7xl mx-auto page-enter">
       <PageHeader
         title="Tạo phiếu kho"
         backTo="/stock/stock-entries"
@@ -206,26 +346,28 @@ export default function StockEntryNew() {
           </div>
         )}
 
-        {/* Header card */}
+        {/* ── Header card ── */}
         <div className="card card-body mb-4">
-          <h2 className="text-base font-semibold text-gray-800 mb-4">Thông tin phiếu</h2>
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+            {/* Loại phiếu */}
             <div>
               <label className="input-label required">Loại phiếu</label>
               <select
                 name="stock_entry_type"
                 value={form.stock_entry_type}
-                onChange={handleFormChange}
+                onChange={handleTypeChange}
                 className="select-field"
                 required
               >
                 {STOCK_ENTRY_TYPES.map(t => (
-                  <option key={t} value={t}>{t}</option>
+                  <option key={t.value} value={t.value}>{t.label}</option>
                 ))}
               </select>
             </div>
+
+            {/* Ngày đăng */}
             <div>
-              <label className="input-label required">Ngày đăng</label>
+              <label className="input-label required">Ngày đăng phiếu</label>
               <input
                 type="date"
                 name="posting_date"
@@ -235,6 +377,20 @@ export default function StockEntryNew() {
                 required
               />
             </div>
+
+            {/* Giờ đăng */}
+            <div>
+              <label className="input-label">Giờ đăng phiếu</label>
+              <input
+                type="time"
+                name="posting_time"
+                value={form.posting_time}
+                onChange={handleFormChange}
+                className="input-field"
+              />
+            </div>
+
+            {/* Công ty */}
             <div>
               <label className="input-label required">Công ty</label>
               <select
@@ -244,16 +400,86 @@ export default function StockEntryNew() {
                 className="select-field"
                 required
               >
-                <option value="">-- Chọn công ty --</option>
+                <option value="">— Chọn công ty —</option>
                 {companies.map(c => (
                   <option key={c.name} value={c.name}>{c.company_name || c.name}</option>
                 ))}
               </select>
             </div>
+
+            {/* Kho nguồn (Material Transfer / Issue) */}
+            {(isTransfer || form.stock_entry_type === 'Material Issue') && (
+              <div>
+                <label className="input-label">Kho nguồn</label>
+                <select
+                  name="from_warehouse"
+                  value={form.from_warehouse}
+                  onChange={handleFormChange}
+                  className="select-field"
+                >
+                  <option value="">— Chọn kho —</option>
+                  {warehouses.map(w => (
+                    <option key={w.name} value={w.name}>{w.warehouse_name || w.name}</option>
+                  ))}
+                </select>
+              </div>
+            )}
+
+            {/* Kho đích (Material Transfer / Receipt) */}
+            {(isTransfer || form.stock_entry_type === 'Material Receipt') && (
+              <div>
+                <label className="input-label">Kho đích</label>
+                <select
+                  name="to_warehouse"
+                  value={form.to_warehouse}
+                  onChange={handleFormChange}
+                  className="select-field"
+                >
+                  <option value="">— Chọn kho —</option>
+                  {warehouses.map(w => (
+                    <option key={w.name} value={w.name}>{w.warehouse_name || w.name}</option>
+                  ))}
+                </select>
+              </div>
+            )}
+          </div>
+
+          {/* Toggles row */}
+          <div className="flex flex-wrap gap-x-6 gap-y-2 mt-4">
+            <label className="flex items-center gap-2 text-sm text-gray-600 cursor-pointer">
+              <input
+                type="checkbox"
+                name="add_to_transit"
+                checked={form.add_to_transit}
+                onChange={handleFormChange}
+                className="checkbox-field"
+              />
+              Add to Transit
+            </label>
+            <label className="flex items-center gap-2 text-sm text-gray-600 cursor-pointer">
+              <input
+                type="checkbox"
+                name="apply_staging_folder_rule"
+                checked={form.apply_staging_folder_rule}
+                onChange={handleFormChange}
+                className="checkbox-field"
+              />
+              Áp dụng quy tắc cất giữ
+            </label>
+            <label className="flex items-center gap-2 text-sm text-gray-600 cursor-pointer">
+              <input
+                type="checkbox"
+                name="inspection_required"
+                checked={form.inspection_required}
+                onChange={handleFormChange}
+                className="checkbox-field"
+              />
+              Bắt buộc kiểm tra
+            </label>
           </div>
         </div>
 
-        {/* Items card */}
+        {/* ── Items card ── */}
         <div className="card card-body mb-4">
           <div className="flex items-center justify-between mb-4">
             <h2 className="text-base font-semibold text-gray-800">Danh sách vật tư</h2>
@@ -261,24 +487,32 @@ export default function StockEntryNew() {
               <Plus size={14} /> Thêm dòng
             </button>
           </div>
+
           <div className="table-container">
-            <table className="data-table">
-              <thead>
-                <tr>
-                  <th style={{ width: '40px' }}>#</th>
-                  <th style={{ minWidth: '180px' }}>Vật tư</th>
-                  <th style={{ minWidth: '140px' }}>Kho nguồn</th>
-                  <th style={{ minWidth: '140px' }}>Kho đích</th>
-                  <th style={{ width: '100px' }} className="text-right">Số lượng</th>
-                  <th style={{ width: '130px' }} className="text-right">Đơn giá</th>
-                  <th style={{ width: '130px' }} className="text-right">Thành tiền</th>
-                  <th style={{ width: '40px' }}></th>
-                </tr>
-              </thead>
+            <div className="overflow-x-auto">
+              <table className="data-table text-sm min-w-[1100px]">
+                <thead>
+                  <tr>
+                    <th className="w-7 text-center">#</th>
+                    <th style={{ minWidth: '160px' }}>Mã vật tư</th>
+                    <th style={{ minWidth: '200px' }}>Tên vật tư</th>
+                    <th style={{ width: '80px' }}>Kho nguồn</th>
+                    <th style={{ width: '80px' }}>Kho đích</th>
+                    <th style={{ width: '90px' }} className="text-right">SL chuyển</th>
+                    <th style={{ width: '60px' }}>ĐVT</th>
+                    <th style={{ width: '90px' }} className="text-right">SL Stock</th>
+                    <th style={{ width: '70px' }}>ĐVT Stock</th>
+                    <th style={{ width: '100px' }} className="text-right">Đơn giá</th>
+                    <th style={{ width: '120px' }} className="text-right">Thành tiền</th>
+                    <th className="w-7"></th>
+                  </tr>
+                </thead>
               <tbody>
                 {rows.map((row, idx) => (
-                  <tr key={idx}>
-                    <td className="text-gray-400">{idx + 1}</td>
+                  <tr key={idx} className="align-middle">
+                    <td className="text-gray-400 text-center text-xs">{idx + 1}</td>
+
+                    {/* Mã vật tư */}
                     <td>
                       <div className="flex gap-1">
                         <input
@@ -295,10 +529,23 @@ export default function StockEntryNew() {
                           className="btn btn-ghost btn-icon text-gray-400 hover:text-blue-600"
                           title="Tìm vật tư"
                         >
-                          <Search size={15} />
+                          <Search size={14} />
                         </button>
                       </div>
                     </td>
+
+                    {/* Tên vật tư */}
+                    <td>
+                      <input
+                        type="text"
+                        value={row.item_name}
+                        readOnly
+                        className="input-field text-sm bg-gray-50"
+                        placeholder="Tên vật tư..."
+                      />
+                    </td>
+
+                    {/* Kho nguồn */}
                     <td>
                       <select
                         value={row.s_warehouse}
@@ -311,6 +558,8 @@ export default function StockEntryNew() {
                         ))}
                       </select>
                     </td>
+
+                    {/* Kho đích */}
                     <td>
                       <select
                         value={row.t_warehouse}
@@ -323,6 +572,34 @@ export default function StockEntryNew() {
                         ))}
                       </select>
                     </td>
+
+                    {/* SL chuyển (transfer_qty) */}
+                    <td>
+                      <input
+                        type="number"
+                        value={row.transfer_qty}
+                        onChange={e => handleRowChange(idx, 'transfer_qty', parseFloat(e.target.value) || 0)}
+                        className="input-field text-sm text-right"
+                        min="0"
+                        step="0.01"
+                      />
+                    </td>
+
+                    {/* ĐVT dòng (uom) */}
+                    <td>
+                      <select
+                        value={row.uom}
+                        onChange={e => handleRowChange(idx, 'uom', e.target.value)}
+                        className="input-field text-sm"
+                      >
+                        <option value="">—</option>
+                        {uoms.map(u => (
+                          <option key={u.name} value={u.name}>{u.uom_name || u.name}</option>
+                        ))}
+                      </select>
+                    </td>
+
+                    {/* SL stock (qty) */}
                     <td>
                       <input
                         type="number"
@@ -333,6 +610,18 @@ export default function StockEntryNew() {
                         step="0.01"
                       />
                     </td>
+
+                    {/* ĐVT stock */}
+                    <td>
+                      <input
+                        type="text"
+                        value={row.stock_uom}
+                        readOnly
+                        className="input-field text-sm bg-gray-50"
+                      />
+                    </td>
+
+                    {/* Đơn giá */}
                     <td>
                       <input
                         type="number"
@@ -343,9 +632,17 @@ export default function StockEntryNew() {
                         step="0.01"
                       />
                     </td>
-                    <td className="text-right font-medium">
-                      {new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND', minimumFractionDigits: 0 }).format(row.basic_amount)}
+
+                    {/* Thành tiền */}
+                    <td className="text-right font-medium text-sm">
+                      {new Intl.NumberFormat('vi-VN', {
+                        style: 'currency',
+                        currency: 'VND',
+                        minimumFractionDigits: 0,
+                      }).format(row.basic_amount)}
                     </td>
+
+                    {/* Xoá */}
                     <td>
                       {rows.length > 1 && (
                         <button
@@ -360,11 +657,69 @@ export default function StockEntryNew() {
                   </tr>
                 ))}
               </tbody>
+
+              {/* Tổng cộng */}
+              {rows.length > 0 && rows.some(r => r.basic_amount > 0) && (
+                <tfoot>
+                  <tr className="border-t border-gray-200 bg-gray-50">
+                    <td colSpan={10} className="text-right font-semibold text-gray-700 pr-3">Tổng cộng:</td>
+                    <td className="text-right font-semibold text-gray-800">
+                      {new Intl.NumberFormat('vi-VN', {
+                        style: 'currency',
+                        currency: 'VND',
+                        minimumFractionDigits: 0,
+                      }).format(rows.reduce((sum, r) => sum + (r.basic_amount || 0), 0))}
+                    </td>
+                    <td></td>
+                  </tr>
+                </tfoot>
+              )}
             </table>
           </div>
         </div>
+        </div>
 
-        {/* Actions */}
+        {/* ── Additional info card ── */}
+        <div className="card card-body mb-4">
+          <h2 className="text-base font-semibold text-gray-800 mb-4">Thông tin bổ sung</h2>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div>
+              <label className="input-label">Dự án (Project)</label>
+              <input
+                type="text"
+                name="project"
+                value={form.project}
+                onChange={handleFormChange}
+                className="input-field"
+                placeholder="Chọn dự án..."
+              />
+            </div>
+            <div>
+              <label className="input-label">Tài khoản chi phí</label>
+              <input
+                type="text"
+                name="expense_account"
+                value={form.expense_account}
+                onChange={handleFormChange}
+                className="input-field"
+                placeholder="Chọn tài khoản..."
+              />
+            </div>
+            <div className="sm:col-span-2">
+              <label className="input-label">Ghi chú (Remarks)</label>
+              <textarea
+                name="remarks"
+                value={form.remarks}
+                onChange={handleFormChange}
+                className="input-field resize-none"
+                rows={3}
+                placeholder="Ghi chú, ghi chú nội bộ..."
+              />
+            </div>
+          </div>
+        </div>
+
+        {/* ── Actions ── */}
         <div className="flex justify-end gap-3">
           <button
             type="button"
@@ -392,14 +747,14 @@ export default function StockEntryNew() {
       {pickerOpen && (
         <>
           <div className="dialog-overlay" onClick={closePicker} />
-          <div className="dialog-content" style={{ maxWidth: '600px' }}>
+          <div className="dialog-content" style={{ maxWidth: '640px' }}>
             <div className="flex items-center justify-between p-4 border-b border-gray-100">
               <h3 className="text-base font-semibold text-gray-800">Chọn vật tư</h3>
               <button type="button" onClick={closePicker} className="btn-icon text-gray-400 hover:text-gray-600">
                 <X size={18} />
               </button>
             </div>
-            <div className="p-4">
+            <div className="p-4 pb-2">
               <input
                 type="text"
                 value={pickerSearch}
@@ -415,6 +770,8 @@ export default function StockEntryNew() {
                   <div className="w-6 h-6 border-2 border-blue-200 border-t-blue-600 rounded-full animate-spin mx-auto mb-2" />
                   Đang tìm...
                 </div>
+              ) : pickerError ? (
+                <div className="p-4 text-sm text-red-500">{pickerError}</div>
               ) : pickerItems.length === 0 ? (
                 <div className="p-8 text-center text-sm text-gray-400">
                   Không tìm thấy vật tư nào
@@ -428,8 +785,13 @@ export default function StockEntryNew() {
                       onClick={() => handlePickerSelect(item)}
                       className="w-full text-left px-4 py-3 hover:bg-blue-50 transition-colors"
                     >
-                      <span className="font-medium text-gray-800">{item.item_code || item.name}</span>
-                      <span className="text-gray-400 ml-3">{item.item_name}</span>
+                      <div className="flex items-center gap-2">
+                        <span className="font-medium text-gray-800">{item.item_code || item.name}</span>
+                        <span className="text-xs text-gray-400 bg-gray-100 px-2 py-0.5 rounded">
+                          {item.item_group || '—'}
+                        </span>
+                      </div>
+                      <div className="text-sm text-gray-500 mt-0.5">{item.item_name}</div>
                     </button>
                   ))}
                 </div>

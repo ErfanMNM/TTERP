@@ -10,11 +10,12 @@ const api = axios.create({
 
 // ERPNext /api/method/ expects x-www-form-urlencoded, not JSON
 api.interceptors.request.use((config) => {
+  // ERPNext doesn't support 100-continue; remove it to avoid 417 on ALL methods
+  delete config.headers['Expect'];
+  // ERPNext resource API is JSON but doesn't need explicit Content-Type when axios sets it
   if (config.method === 'get' || config.method === 'GET') {
     delete config.headers['Content-Type'];
   }
-  // ERPNext doesn't support 100-continue; remove it to avoid 417
-  delete config.headers['Expect'];
   return config;
 });
 
