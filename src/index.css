@@ -103,15 +103,17 @@
   .table-container {
     @apply w-full rounded-2xl border border-gray-200 bg-white shadow-sm;
     overflow: auto;
+    max-height: 70vh;
   }
   .table-container.h-full {
     height: 100%;
+    max-height: none;
   }
   .data-table {
     @apply w-full text-sm;
     border-collapse: collapse;
-    table-layout: fixed;
-    width: 100%;
+    width: max-content;
+    min-width: 100%;
   }
   .data-table thead {
     @apply bg-slate-800 text-white sticky top-0 z-10;
@@ -119,9 +121,8 @@
   .data-table thead th {
     @apply px-3 py-3 text-xs font-semibold uppercase tracking-wider text-left text-white/90;
     border-right: 1px solid rgba(255,255,255,0.1);
-    overflow: hidden;
-    text-overflow: ellipsis;
     white-space: nowrap;
+    background-color: #1e293b;
   }
   .data-table thead th:last-child {
     border-right: none;
@@ -153,9 +154,6 @@
   .data-table tbody td {
     @apply px-3 py-3 text-gray-800;
     vertical-align: middle;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
     border-right: 1px solid #f1f5f9;
   }
   .data-table tbody td:last-child {

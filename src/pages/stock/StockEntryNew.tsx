@@ -489,44 +489,45 @@ export default function StockEntryNew() {
           </div>
 
           <div className="table-container">
-            <div className="overflow-x-auto">
-              <table className="data-table text-sm min-w-[1100px]">
+            <div className="overflow-auto" style={{ maxHeight: 'none' }}>
+              <table className="data-table text-sm min-w-225" style={{ width: 'max-content', tableLayout: 'auto' }}>
                 <thead>
                   <tr>
-                    <th className="w-7 text-center">#</th>
-                    <th style={{ minWidth: '160px' }}>Mã vật tư</th>
-                    <th style={{ minWidth: '200px' }}>Tên vật tư</th>
-                    <th style={{ width: '80px' }}>Kho nguồn</th>
-                    <th style={{ width: '80px' }}>Kho đích</th>
-                    <th style={{ width: '90px' }} className="text-right">SL chuyển</th>
-                    <th style={{ width: '60px' }}>ĐVT</th>
-                    <th style={{ width: '90px' }} className="text-right">SL Stock</th>
-                    <th style={{ width: '70px' }}>ĐVT Stock</th>
-                    <th style={{ width: '100px' }} className="text-right">Đơn giá</th>
-                    <th style={{ width: '120px' }} className="text-right">Thành tiền</th>
-                    <th className="w-7"></th>
+                    <th className="w-8 text-center bg-blue-900 text-white sticky left-0 z-10" title="#">#</th>
+                    <th style={{ minWidth: '130px' }} title="Mã vật tư">Mã vật tư</th>
+                    <th style={{ minWidth: '160px' }} title="Tên vật tư">Tên vật tư</th>
+                    <th style={{ minWidth: '120px' }} title="Kho nguồn">Kho nguồn</th>
+                    <th style={{ minWidth: '120px' }} title="Kho đích">Kho đích</th>
+                    <th style={{ width: '90px' }} className="text-right" title="Số lượng chuyển">SL chuyển</th>
+                    <th style={{ width: '70px' }} title="Đơn vị tính">ĐVT</th>
+                    <th style={{ width: '90px' }} className="text-right" title="Số lượng stock">SL Stock</th>
+                    <th style={{ width: '80px' }} title="Đơn vị tính stock">ĐVT Stock</th>
+                    <th style={{ width: '100px' }} className="text-right" title="Đơn giá">Đơn giá</th>
+                    <th style={{ width: '120px' }} className="text-right" title="Thành tiền">Thành tiền</th>
+                    <th className="w-8 bg-blue-900 text-white sticky right-0 z-10"></th>
                   </tr>
                 </thead>
               <tbody>
                 {rows.map((row, idx) => (
                   <tr key={idx} className="align-middle">
-                    <td className="text-gray-400 text-center text-xs">{idx + 1}</td>
+                    <td className="text-gray-400 text-center text-xs whitespace-nowrap bg-white" style={{ position: 'sticky', left: 0, zIndex: 1 }}>{idx + 1}</td>
 
                     {/* Mã vật tư */}
-                    <td>
-                      <div className="flex gap-1">
+                    <td style={{ minWidth: '160px' }}>
+                      <div className="flex gap-1 items-center">
                         <input
                           type="text"
                           value={row.item_code}
                           readOnly
                           placeholder="Chọn vật tư..."
-                          className="input-field text-sm cursor-pointer"
+                          className="input-field text-sm cursor-pointer flex-1"
+                          style={{ minWidth: '100px' }}
                           onClick={() => openPicker(idx)}
                         />
                         <button
                           type="button"
                           onClick={() => openPicker(idx)}
-                          className="btn btn-ghost btn-icon text-gray-400 hover:text-blue-600"
+                          className="btn btn-ghost btn-icon text-gray-400 hover:text-blue-600 shrink-0"
                           title="Tìm vật tư"
                         >
                           <Search size={14} />
@@ -535,22 +536,24 @@ export default function StockEntryNew() {
                     </td>
 
                     {/* Tên vật tư */}
-                    <td>
+                    <td style={{ minWidth: '200px' }}>
                       <input
                         type="text"
                         value={row.item_name}
                         readOnly
-                        className="input-field text-sm bg-gray-50"
+                        className="input-field text-sm bg-gray-50 w-full"
+                        style={{ minWidth: '150px' }}
                         placeholder="Tên vật tư..."
                       />
                     </td>
 
                     {/* Kho nguồn */}
-                    <td>
+                    <td style={{ minWidth: '150px' }}>
                       <select
                         value={row.s_warehouse}
                         onChange={e => handleRowChange(idx, 's_warehouse', e.target.value)}
-                        className="input-field text-sm"
+                        className="input-field text-sm w-full"
+                        style={{ minWidth: '130px' }}
                       >
                         <option value="">—</option>
                         {warehouses.map(w => (
@@ -560,11 +563,12 @@ export default function StockEntryNew() {
                     </td>
 
                     {/* Kho đích */}
-                    <td>
+                    <td style={{ minWidth: '150px' }}>
                       <select
                         value={row.t_warehouse}
                         onChange={e => handleRowChange(idx, 't_warehouse', e.target.value)}
-                        className="input-field text-sm"
+                        className="input-field text-sm w-full"
+                        style={{ minWidth: '130px' }}
                       >
                         <option value="">—</option>
                         {warehouses.map(w => (
@@ -574,23 +578,23 @@ export default function StockEntryNew() {
                     </td>
 
                     {/* SL chuyển (transfer_qty) */}
-                    <td>
+                    <td style={{ minWidth: '90px' }}>
                       <input
                         type="number"
                         value={row.transfer_qty}
                         onChange={e => handleRowChange(idx, 'transfer_qty', parseFloat(e.target.value) || 0)}
-                        className="input-field text-sm text-right"
+                        className="input-field text-sm text-right w-full"
                         min="0"
                         step="0.01"
                       />
                     </td>
 
                     {/* ĐVT dòng (uom) */}
-                    <td>
+                    <td style={{ minWidth: '80px' }}>
                       <select
                         value={row.uom}
                         onChange={e => handleRowChange(idx, 'uom', e.target.value)}
-                        className="input-field text-sm"
+                        className="input-field text-sm w-full"
                       >
                         <option value="">—</option>
                         {uoms.map(u => (
@@ -600,41 +604,41 @@ export default function StockEntryNew() {
                     </td>
 
                     {/* SL stock (qty) */}
-                    <td>
+                    <td style={{ minWidth: '90px' }}>
                       <input
                         type="number"
                         value={row.qty}
                         onChange={e => handleRowChange(idx, 'qty', parseFloat(e.target.value) || 0)}
-                        className="input-field text-sm text-right"
+                        className="input-field text-sm text-right w-full"
                         min="0"
                         step="0.01"
                       />
                     </td>
 
                     {/* ĐVT stock */}
-                    <td>
+                    <td style={{ minWidth: '80px' }}>
                       <input
                         type="text"
                         value={row.stock_uom}
                         readOnly
-                        className="input-field text-sm bg-gray-50"
+                        className="input-field text-sm bg-gray-50 w-full"
                       />
                     </td>
 
                     {/* Đơn giá */}
-                    <td>
+                    <td style={{ minWidth: '100px' }}>
                       <input
                         type="number"
                         value={row.basic_rate}
                         onChange={e => handleRowChange(idx, 'basic_rate', parseFloat(e.target.value) || 0)}
-                        className="input-field text-sm text-right"
+                        className="input-field text-sm text-right w-full"
                         min="0"
                         step="0.01"
                       />
                     </td>
 
                     {/* Thành tiền */}
-                    <td className="text-right font-medium text-sm">
+                    <td className="text-right font-medium text-sm" style={{ minWidth: '120px' }}>
                       {new Intl.NumberFormat('vi-VN', {
                         style: 'currency',
                         currency: 'VND',
@@ -643,7 +647,7 @@ export default function StockEntryNew() {
                     </td>
 
                     {/* Xoá */}
-                    <td>
+                    <td className="w-8">
                       {rows.length > 1 && (
                         <button
                           type="button"
@@ -662,7 +666,7 @@ export default function StockEntryNew() {
               {rows.length > 0 && rows.some(r => r.basic_amount > 0) && (
                 <tfoot>
                   <tr className="border-t border-gray-200 bg-gray-50">
-                    <td colSpan={10} className="text-right font-semibold text-gray-700 pr-3">Tổng cộng:</td>
+                    <td colSpan={11} className="text-right font-semibold text-gray-700 pr-3">Tổng cộng:</td>
                     <td className="text-right font-semibold text-gray-800">
                       {new Intl.NumberFormat('vi-VN', {
                         style: 'currency',

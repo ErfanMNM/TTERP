@@ -12,7 +12,9 @@
       "mcp__browsermcp__browser_click",
       "mcp__chrome-devtools__evaluate_script",
       "Bash(npm run *)",
-      "Bash(npm install *)"
+      "Bash(npm install *)",
+      "mcp__chrome-devtools__list_network_requests",
+      "mcp__chrome-devtools__get_network_request"
     ]
   }
 }
