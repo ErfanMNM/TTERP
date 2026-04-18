@@ -983,6 +983,23 @@ export async function searchLink(
 }
 
 // ─── ToDo ─────────────────────────────────────────────────────────────────────
+export interface ToDoItem {
+  name: string;
+  description: string;
+  status: string;
+  priority: string;
+  date: string;
+  reference_type: string;
+  reference_name: string;
+  owner: string;
+  _assign: string;
+  _seen: string;
+  color: string;
+  _comment_count: number;
+  creation: string;
+  modified: string;
+}
+
 export const toDoApi = {
   list: (params?: Record<string, unknown>) =>
     listResource<{
@@ -991,35 +1008,49 @@ export const toDoApi = {
       reference_type: string; reference_name: string;
       date: string; priority: string; creation: string;
     }>('ToDo', params),
-  getList: (params: Record<string, unknown>) =>
-    reportview<{
-      message: Array<{
-        name: string; description: string; status: string;
-        assigned_by: string; _assign: string;
-        reference_type: string; reference_name: string;
-        date: string; priority: string; creation: string;
-      }>;
+  getList: async (params?: {
+    filters?: unknown[];
+    start?: number;
+    pageLength?: number;
+  }): Promise<ToDoItem[]> => {
+    const raw = await reportview<{
+      message: { keys: string[]; values: unknown[][] };
     }>('frappe.desk.reportview.get', {
       doctype: 'ToDo',
       fields: JSON.stringify([
         '`tabToDo`.`name`',
-        '`tabToDo`.`description`',
-        '`tabToDo`.`status`',
-        '`tabToDo`.`assigned_by`',
-        '`tabToDo`.`_assign`',
-        '`tabToDo`.`reference_type`',
-        '`tabToDo`.`reference_name`',
-        '`tabToDo`.`date`',
-        '`tabToDo`.`priority`',
+        '`tabToDo`.`owner`',
         '`tabToDo`.`creation`',
+        '`tabToDo`.`modified`',
+        '`tabToDo`.`status`',
+        '`tabToDo`.`priority`',
+        '`tabToDo`.`date`',
+        '`tabToDo`.`reference_type`',
+        '`tabToDo`.`description`',
+        '`tabToDo`.`reference_name`',
+        '`tabToDo`.`_seen`',
+        '`tabToDo`.`color`',
       ]),
-      ...(params.filters ? { filters: params.filters } : {}),
+      filters: JSON.stringify(params?.filters ?? []),
       order_by: '`tabToDo`.`creation` desc',
-      start: (params.start as number) ?? 0,
-      page_length: (params.page_length as number) ?? 50,
+      start: params?.start ?? 0,
+      page_length: params?.pageLength ?? 20,
       view: 'List',
       group_by: '',
-      with_comment_count: false,
+      with_comment_count: true,
+    });
+    const { keys, values } = raw.message;
+    return (values ?? []).map(row =>
+      Object.fromEntries(keys.map((k, i) => [k, row[i]]))
+    ) as ToDoItem[];
+  },
+  getCount: (params?: { filters?: unknown[] }) =>
+    reportview<{ message: number }>('frappe.desk.reportview.get_count', {
+      doctype: 'ToDo',
+      filters: JSON.stringify(params?.filters ?? []),
+      fields: JSON.stringify([]),
+      distinct: false,
+      limit: 1001,
     }),
   create: (data: unknown) =>
     createResource('ToDo', data),

@@ -6,7 +6,8 @@ import {
   Briefcase, FileText, Settings, ChevronDown, ChevronRight,
   Menu, X, ChevronLeft, LogOut, Bell, Search,
   TrendingUp, ClipboardList, Receipt, Truck,
-  PackageSearch, Building2, UserCog, Target, Hammer
+  PackageSearch, Building2, UserCog, Target, Hammer,
+  CheckSquare
 } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 
@@ -30,6 +31,7 @@ const navGroups: NavGroup[] = [
     items: [
       { label: 'Dự án', path: '/projects/projects', icon: <Briefcase size={18} /> },
       { label: 'Công việc', path: '/projects/tasks', icon: <ClipboardList size={18} /> },
+      { label: 'Việc cần làm', path: '/projects/todos', icon: <CheckSquare size={18} /> },
       { label: 'Bảng công', path: '/projects/timesheets', icon: <BarChart3 size={18} /> },
     ],
   },

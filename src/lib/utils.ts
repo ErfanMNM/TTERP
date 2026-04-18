@@ -32,6 +32,8 @@ export function formatDate(date: string | Date | null | undefined, format: 'shor
   }).format(d);
 }
 
+export const formatDateTime = (date: string | Date | null | undefined) => formatDate(date, 'datetime');
+
 export function formatNumber(num: number | string, decimals = 0): string {
   const n = typeof num === 'string' ? parseFloat(num) : num;
   if (isNaN(n)) return '0';
