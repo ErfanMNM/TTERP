@@ -166,6 +166,29 @@ export async function callMethod<T = unknown>(method: string, args?: Record<stri
   return res.data;
 }
 
+// Direct method call - sends params as form fields directly (not wrapped in args=JSON.stringify)
+export async function callMethodDirect<T = unknown>(method: string, params: Record<string, unknown>): Promise<T> {
+  const body = new URLSearchParams();
+  for (const [k, v] of Object.entries(params)) {
+    body.set(k, typeof v === 'string' ? v : JSON.stringify(v));
+  }
+  const headers = new Headers({
+    'Content-Type': 'application/x-www-form-urlencoded',
+    'Accept': 'application/json',
+    'X-Requested-With': 'XMLHttpRequest',
+  });
+  headers.set('Expect', '');
+  const res = await fetch(`/api/method/${method}`, {
+    method: 'POST',
+    credentials: 'include',
+    headers,
+    body,
+  });
+  const data = await res.json();
+  if (data?.exception) throw new Error(data.message || data.exception || 'API Error');
+  return data;
+}
+
 // ─── Company ─────────────────────────────────────────────────────────────────
 export const companyApi = {
   list: (params?: Record<string, unknown>) =>

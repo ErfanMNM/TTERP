@@ -1,9 +1,9 @@
 import React, { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { ArrowLeft, User, Calendar, Tag, Link2, MessageSquare, History, RotateCcw, Save } from 'lucide-react';
+import { ArrowLeft, User, Calendar, Tag, Link2, MessageSquare, History, RotateCcw, Save, Send } from 'lucide-react';
 import PageHeader from '../../components/PageHeader';
 import StatusBadge from '../../components/StatusBadge';
-import { getDoc } from '../../services/api';
+import { getDoc, callMethodDirect } from '../../services/api';
 import { formatDate, formatDateTime } from '../../lib/utils';
 
 function stripHtml(html: string): string {
@@ -62,6 +62,8 @@ export default function TodoDetail() {
   const [editStatus, setEditStatus] = useState('');
   const [editPriority, setEditPriority] = useState('');
   const [editColor, setEditColor] = useState('#39E4A5');
+  const [commentText, setCommentText] = useState('');
+  const [submittingComment, setSubmittingComment] = useState(false);
 
   useEffect(() => {
     if (!name) return;
@@ -115,6 +117,29 @@ export default function TodoDetail() {
       })
       .catch(() => {})
       .finally(() => setSaving(false));
+  };
+
+  const handleSubmitComment = async () => {
+    if (!commentText.trim() || !data) return;
+    setSubmittingComment(true);
+    try {
+      // Use frappe.desk.form.utils.add_comment - correct API for Frappe
+      await callMethodDirect('frappe.desk.form.utils.add_comment', {
+        reference_doctype: 'ToDo',
+        reference_name: data.name,
+        content: `<div class="ql-editor read-mode"><p>${commentText}</p></div>`,
+        comment_email: 'okeynhat@gmail.com',
+        comment_by: 'Thức Trần Minh',
+      });
+      setCommentText('');
+      // Refresh docinfo to get updated comments
+      const res = await getDoc('ToDo', data.name);
+      setDocinfo(res.docinfo as DocInfo);
+    } catch (err) {
+      console.error('Comment error:', err);
+    } finally {
+      setSubmittingComment(false);
+    }
   };
 
   if (loading) {
@@ -325,6 +350,41 @@ export default function TodoDetail() {
               ) : (
                 <div className="p-6 text-center text-xs text-gray-400">Chưa có bình luận</div>
               )}
+            </div>
+            {/* Comment input */}
+            <div className="px-4 py-3 border-t border-gray-100">
+              <div className="flex items-start gap-2">
+                <div className="w-6 h-6 bg-blue-600 rounded-full flex items-center justify-center flex-shrink-0 mt-0.5">
+                  <span className="text-white text-xs font-semibold">
+                    {userMap[data.owner]?.fullname?.charAt(0) || userMap[data.owner]?.name?.charAt(0) || 'Y'}
+                  </span>
+                </div>
+                <div className="flex-1">
+                  <textarea
+                    value={commentText}
+                    onChange={e => setCommentText(e.target.value)}
+                    onKeyDown={e => {
+                      if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) {
+                        e.preventDefault();
+                        handleSubmitComment();
+                      }
+                    }}
+                    placeholder="Nhập bình luận..."
+                    rows={2}
+                    className="w-full text-sm border border-gray-200 rounded-lg px-3 py-2 resize-none focus:outline-none focus:ring-1 focus:ring-blue-400"
+                  />
+                  <div className="flex justify-end mt-1">
+                    <button
+                      onClick={handleSubmitComment}
+                      disabled={!commentText.trim() || submittingComment}
+                      className="btn btn-primary btn-sm flex items-center gap-1"
+                    >
+                      <Send size={12} />
+                      {submittingComment ? 'Đang gửi...' : 'Gửi'}
+                    </button>
+                  </div>
+                </div>
+              </div>
             </div>
           </div>
 
