@@ -1012,6 +1012,8 @@ export interface ToDoItem {
   status: string;
   priority: string;
   date: string;
+  allocated_to: string;
+  assigned_by: string;
   reference_type: string;
   reference_name: string;
   owner: string;
@@ -1048,6 +1050,8 @@ export const toDoApi = {
         '`tabToDo`.`status`',
         '`tabToDo`.`priority`',
         '`tabToDo`.`date`',
+        '`tabToDo`.`allocated_to`',
+        '`tabToDo`.`assigned_by`',
         '`tabToDo`.`reference_type`',
         '`tabToDo`.`description`',
         '`tabToDo`.`reference_name`',
@@ -1063,9 +1067,9 @@ export const toDoApi = {
       with_comment_count: true,
     });
     const { keys, values } = raw.message;
-    return (values ?? []).map(row =>
+    return (values ?? []).map((row) =>
       Object.fromEntries(keys.map((k, i) => [k, row[i]]))
-    ) as ToDoItem[];
+    ) as unknown as ToDoItem[];
   },
   getCount: (params?: { filters?: unknown[] }) =>
     reportview<{ message: number }>('frappe.desk.reportview.get_count', {

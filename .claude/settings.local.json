@@ -14,7 +14,25 @@
       "Bash(npm run *)",
       "Bash(npm install *)",
       "mcp__chrome-devtools__list_network_requests",
-      "mcp__chrome-devtools__get_network_request"
+      "mcp__chrome-devtools__get_network_request",
+      "Bash(dir /s /b \"C:\\\\Users\\\\nguyenvu\\\\workspace\\\\erp-vue\\\\src\\\\pages\\\\projects\\\\Todo*.tsx\")",
+      "Bash(dir /s /b \"D:\\\\WORK 2\\\\TTERP\\\\src\\\\pages\\\\projects\\\\Todo*.tsx\")",
+      "Bash(dir *)",
+      "mcp__chrome-devtools__list_console_messages",
+      "mcp__chrome-devtools__fill",
+      "WebFetch(domain:raw.githubusercontent.com)",
+      "WebFetch(domain:frappeframework.com)",
+      "WebFetch(domain:github.com)",
+      "mcp__chrome-devtools__press_key",
+      "Bash(gh pr create --title 'feat\\(todo\\): add comment functionality to TodoDetail page' --body ' *)",
+      "mcp__chrome-devtools__list_pages",
+      "mcp__chrome-devtools__close_page",
+      "WebFetch(domain:erp.mte.vn)",
+      "mcp__chrome-devtools__new_page",
+      "mcp__chrome-devtools__select_page",
+      "Bash(taskkill /F /IM chrome.exe)",
+      "Bash(taskkill /F /IM chrome_proxy.exe)",
+      "Bash(tasklist /FI \"IMAGENAME eq chrome.exe\")"
     ]
   }
 }
