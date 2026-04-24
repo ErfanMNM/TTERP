@@ -60,6 +60,7 @@ import Contacts from './pages/crm/Contacts';
 
 // Projects
 import Projects from './pages/projects/Projects';
+import ProjectDetail from './pages/projects/ProjectDetail';
 import Tasks from './pages/projects/Tasks';
 import Timesheets from './pages/projects/Timesheets';
 import Todo from './pages/projects/Todo';
@@ -167,6 +168,7 @@ export default function App() {
 
             {/* Projects */}
             <Route path="/projects/projects" element={<Projects />} />
+            <Route path="/projects/projects/:name" element={<ProjectDetail />} />
             <Route path="/projects/tasks" element={<Tasks />} />
             <Route path="/projects/timesheets" element={<Timesheets />} />
             <Route path="/projects/todos" element={<Todo />} />

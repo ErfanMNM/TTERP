@@ -22,15 +22,63 @@ export default function Projects() {
   const [data, setData] = useState<Project[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(20);
+  const [total, setTotal] = useState(0);
 
   useEffect(() => {
-    projectApi.list({
-      fields: JSON.stringify(['name', 'project_name', 'status', 'project_type', 'percent_complete', 'expected_start_date', 'expected_end_date']),
-      order_by: { field: 'modified', order: 'desc' },
-    }).then(res => {
-      setData(res.data?.data || []);
-    }).catch(() => {}).finally(() => setLoading(false));
-  }, []);
+    let cancelled = false;
+    setLoading(true);
+
+    const fetchProjects = async () => {
+      try {
+        const query = search.trim();
+        const filters: unknown[] = [];
+        const orFilters = query
+          ? [
+              ['Project', 'name', 'like', `%${query}%`],
+              ['Project', 'project_name', 'like', `%${query}%`],
+            ]
+          : [];
+
+        const [countRes, listRes] = await Promise.all([
+          projectApi.getCount({ filters, orFilters }),
+          projectApi.getList({
+            pageLength: pageSize,
+            start: (page - 1) * pageSize,
+            filters,
+            orFilters,
+          }),
+        ]);
+
+        if (cancelled) return;
+
+        const raw = listRes?.message;
+        const projects = raw?.keys && raw?.values
+          ? raw.values.map((row) => {
+              const item: Record<string, unknown> = {};
+              raw.keys.forEach((column, index) => {
+                item[column] = row[index];
+              });
+              return item as Project;
+            })
+          : [];
+
+        setData(projects);
+        setTotal(countRes?.message ?? projects.length);
+      } catch {
+        if (!cancelled) {
+          setData([]);
+          setTotal(0);
+        }
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    };
+
+    fetchProjects();
+    return () => { cancelled = true; };
+  }, [page, pageSize, search]);
 
   const columns = [
     { key: 'name', label: 'Mã dự án', sortable: true },
@@ -42,18 +90,11 @@ export default function Projects() {
     { key: 'expected_end_date', label: 'Kết thúc dự kiến', sortable: true, render: (v: unknown) => formatDate(v as string) },
   ];
 
-  const filtered = search
-    ? data.filter(r =>
-        r.name.toLowerCase().includes(search.toLowerCase()) ||
-        r.project_name?.toLowerCase().includes(search.toLowerCase())
-      )
-    : data;
-
   return (
     <div className="max-w-6xl mx-auto">
       <PageHeader
         title="Dự án"
-        subtitle={`${data.length} dự án`}
+        subtitle={`${total} dự án`}
         actions={
           <button onClick={() => navigate('/projects/projects/new')} className="btn btn-primary flex items-center gap-2">
             <Plus size={18} /> Thêm
@@ -63,14 +104,27 @@ export default function Projects() {
       <div className="card card-body p-0">
         <DataTable
           columns={columns}
-          data={filtered as unknown as Record<string, unknown>[]}
+          data={data as unknown as Record<string, unknown>[]}
           loading={loading}
           emptyText="Không có dự án nào"
           emptyIcon={<FolderKanban size={32} className="text-gray-300" />}
           rowKey="name"
           onRowClick={(row) => navigate(`/projects/projects/${row.name}`)}
-          showSearch={false}
-          showPagination={false}
+          page={page}
+          pageSize={pageSize}
+          total={total}
+          onPageChange={setPage}
+          onPageSizeChange={(size) => {
+            setPageSize(size);
+            setPage(1);
+          }}
+          searchValue={search}
+          onSearchChange={(value) => {
+            setSearch(value);
+            setPage(1);
+          }}
+          showSearch={true}
+          showPagination={true}
         />
       </div>
     </div>
