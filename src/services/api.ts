@@ -189,6 +189,70 @@ export async function callMethodDirect<T = unknown>(method: string, params: Reco
   return data;
 }
 
+export interface AssignmentAddParams {
+  doctype: string;
+  name: string;
+  assignTo: string[];
+  date?: string;
+  priority?: string;
+  description?: string;
+}
+
+export interface UploadedFile {
+  name: string;
+  file_name: string;
+  file_url: string;
+  is_private?: number;
+}
+
+export const assignToApi = {
+  add: async (params: AssignmentAddParams) =>
+    callMethodDirect('frappe.desk.form.assign_to.add', {
+      assign_to_me: 0,
+      assign_to: params.assignTo,
+      date: params.date || '',
+      priority: params.priority || 'Medium',
+      description: params.description || '<div class="ql-editor read-mode"><p></p></div>',
+      doctype: params.doctype,
+      name: params.name,
+      bulk_assign: false,
+      re_assign: false,
+    }),
+  remove: async (params: { doctype: string; name: string; assignTo: string }) =>
+    callMethodDirect('frappe.desk.form.assign_to.remove', {
+      doctype: params.doctype,
+      name: params.name,
+      assign_to: params.assignTo,
+    }),
+};
+
+export async function uploadAttachment(params: {
+  doctype: string;
+  docname: string;
+  file: File;
+  isPrivate?: boolean;
+}): Promise<UploadedFile> {
+  const form = new FormData();
+  form.append('file', params.file);
+  form.append('doctype', params.doctype);
+  form.append('docname', params.docname);
+  form.append('is_private', params.isPrivate ? '1' : '0');
+
+  const res = await fetch('/api/method/upload_file', {
+    method: 'POST',
+    credentials: 'include',
+    headers: {
+      Accept: 'application/json',
+      'X-Requested-With': 'XMLHttpRequest',
+    },
+    body: form,
+  });
+
+  const data = await res.json();
+  if (data?.exception) throw new Error(data.message || data.exception || 'Upload failed');
+  return (data?.message || data) as UploadedFile;
+}
+
 // ─── Company ─────────────────────────────────────────────────────────────────
 export const companyApi = {
   list: (params?: Record<string, unknown>) =>
@@ -798,6 +862,55 @@ export const projectApi = {
       project_type: string; percent_complete: number;
       expected_start_date: string; expected_end_date: string; company: string;
     }>('Project', params),
+  getCount: async (params?: { filters?: unknown[]; orFilters?: unknown[] }) => {
+    const search = new URLSearchParams({
+      doctype: 'Project',
+      filters: JSON.stringify(params?.filters ?? []),
+      or_filters: JSON.stringify(params?.orFilters ?? []),
+      fields: JSON.stringify([]),
+      distinct: 'false',
+      limit: '1001',
+    });
+    const res = await fetch(`/api/method/frappe.desk.reportview.get_count?${search}`, {
+      method: 'GET',
+      credentials: 'include',
+      headers: {
+        Accept: 'application/json',
+        'X-Requested-With': 'XMLHttpRequest',
+      },
+    });
+    const data = await res.json();
+    if (data?.exception) throw new Error(data.message || data.exception || 'API Error');
+    return data as { message: number };
+  },
+  getList: (params?: {
+    pageLength?: number;
+    start?: number;
+    filters?: unknown[];
+    orFilters?: unknown[];
+  }) =>
+    reportview<{
+      message: { keys: string[]; values: unknown[][] };
+    }>('frappe.desk.reportview.get', {
+      doctype: 'Project',
+      fields: JSON.stringify([
+        '`tabProject`.`name`',
+        '`tabProject`.`project_name`',
+        '`tabProject`.`status`',
+        '`tabProject`.`project_type`',
+        '`tabProject`.`percent_complete`',
+        '`tabProject`.`expected_start_date`',
+        '`tabProject`.`expected_end_date`',
+      ]),
+      filters: JSON.stringify(params?.filters ?? []),
+      or_filters: JSON.stringify(params?.orFilters ?? []),
+      order_by: '`tabProject`.`creation` desc',
+      start: params?.start ?? 0,
+      page_length: params?.pageLength ?? 20,
+      view: 'List',
+      group_by: '',
+      with_comment_count: false,
+    }),
   get: (name: string) =>
     getResource('Project', name),
   create: (data: unknown) =>
